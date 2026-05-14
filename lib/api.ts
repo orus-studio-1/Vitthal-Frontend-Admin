@@ -1,6 +1,8 @@
 import axios from 'axios';
 import {
   AnalyticsData,
+  AdminVendorChatConversation,
+  AdminVendorChatSummary,
   ApiResponse,
   DashboardStats,
   LoginCredentials,
@@ -9,8 +11,10 @@ import {
   Product,
   RegisterData,
   User,
+  UserDetailsData,
   UserManagementData,
   Vendor,
+  VendorInsightsData,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000';
@@ -126,16 +130,10 @@ export const orderAPI = {
 };
 
 export const vendorAPI = {
-  create: (data: {
-    name: string;
-    email: string;
-    phone?: string;
-    companyName: string;
-    gstNumber?: string;
-    password?: string;
-  }) => api.post<ApiResponse<Vendor>>('/api/vendors', data),
-
   getAll: () => api.get<ApiResponse<Vendor[]>>('/api/vendors'),
+
+  getInsights: (id: string, timeframe?: 'month' | '6months' | 'year' | 'all') =>
+    api.get<ApiResponse<VendorInsightsData>>(`/api/vendors/${id}/insights`, { params: { timeframe } }),
 
   updateStatus: (id: string, data: Partial<Pick<Vendor, 'is_active' | 'is_blocked'>>) =>
     api.put<ApiResponse<Vendor>>(`/api/vendors/${id}/status`, data),
@@ -152,8 +150,20 @@ export const adminAPI = {
 
   getUsers: () => api.get<ApiResponse<UserManagementData>>('/api/admin/users'),
 
+  getUserDetails: (id: string) =>
+    api.get<ApiResponse<UserDetailsData>>(`/api/admin/users/${id}`),
+
   updateUserStatus: (id: string, is_active: boolean) =>
     api.put<ApiResponse<User>>(`/api/admin/users/${id}/status`, { is_active }),
+
+  getVendorChats: () =>
+    api.get<ApiResponse<AdminVendorChatSummary[]>>('/api/admin/vendor-chats'),
+
+  getVendorChatConversation: (vendorId: string, page = 1, limit = 100) =>
+    api.get<ApiResponse<AdminVendorChatConversation>>(`/api/admin/vendor-chats/${vendorId}`, { params: { page, limit } }),
+
+  sendVendorChatMessage: (vendorId: string, body: string) =>
+    api.post<ApiResponse<AdminVendorChatConversation['messages'][number]>>(`/api/admin/vendor-chats/${vendorId}`, { body }),
 };
 
 export default api;

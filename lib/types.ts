@@ -14,6 +14,7 @@ export interface User {
   role: UserRole;
   is_active?: boolean;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface LoginCredentials {
@@ -179,5 +180,157 @@ export interface UserManagementData {
     active: number;
     inactive: number;
     byRole: Partial<Record<UserRole, number>>;
+  };
+}
+
+export interface VendorDashboardData {
+  stats: {
+    totalRevenue: number;
+    totalOrders: number;
+    activeProducts: number;
+    totalCustomers: number;
+  };
+  revenueChart: {
+    labels: string[];
+    data: number[];
+  };
+  recentOrders: Array<{
+    orderId: string;
+    customerName: string;
+    productName: string;
+    date: string;
+    amount: number;
+    status: string;
+  }>;
+  topProducts: Array<{
+    name: string;
+    sales: number;
+    revenue: number;
+  }>;
+}
+
+export interface VendorAnalyticsSnapshot {
+  timeframe: string;
+  kpi: {
+    totalQuantity: number;
+    tonnageGrowth: number;
+    avgOrderValue: number;
+    aovGrowth: number;
+    topSegment: {
+      name: string;
+      volume: number;
+      percentage: number;
+    } | null;
+    totalRevenue: number;
+    revenueGrowth: number;
+  };
+  revenueChart: {
+    labels: string[];
+    data: number[];
+  };
+  categoryDistribution: Array<{
+    name: string;
+    quantity: number;
+    revenue: number;
+    percentage: number;
+  }>;
+  topProducts: Array<{
+    id: string;
+    name: string;
+    category: string;
+    sales: number;
+    revenue: number;
+    growth: number;
+  }>;
+}
+
+export interface VendorInsightsData {
+  vendor: Vendor;
+  dashboard: VendorDashboardData;
+  analytics: VendorAnalyticsSnapshot;
+}
+
+export interface UserDetailsData {
+  user: User;
+  address: {
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    pincode: string;
+  } | null;
+  clientProfile: {
+    phone: string;
+  } | null;
+  vendorProfile: {
+    id: string;
+    company_name: string;
+    gst_number?: string | null;
+    phone?: string | null;
+    approval_status: ApprovalStatus;
+    approval_notes?: string | null;
+    is_blocked: boolean;
+    order_count: number;
+    total_revenue: number;
+  } | null;
+  customerStats: {
+    totalOrders: number;
+    totalSpent: number;
+    lastOrderAt: string | null;
+  };
+  recentOrders: Array<{
+    id: string;
+    status: string;
+    total_amount: number;
+    created_at: string;
+    order_reference?: string | null;
+    vendor_name?: string | null;
+  }>;
+}
+
+export interface AdminVendorChatSummary {
+  vendorId: string;
+  vendor: {
+    id: string;
+    userId: string;
+    companyName: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+  };
+  unreadCount: number;
+  lastMessage: {
+    id: string;
+    vendorId: string;
+    senderUserId: string;
+    senderRole: string;
+    body: string;
+    isRead: boolean;
+    createdAt: string;
+  } | null;
+}
+
+export interface AdminVendorChatConversation {
+  vendor: {
+    id: string;
+    userId: string;
+    companyName: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+  };
+  messages: Array<{
+    id: string;
+    vendorId: string;
+    senderUserId: string;
+    senderRole: string;
+    body: string;
+    isRead: boolean;
+    createdAt: string;
+  }>;
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
   };
 }

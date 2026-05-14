@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth-context';
 import {
   BarChart3,
   Building2,
+  MessageSquare,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -20,6 +21,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Products', href: '/dashboard/products', icon: Package },
   { name: 'Vendors', href: '/dashboard/vendors', icon: Building2 },
+  { name: 'Vendor Chat', href: '/dashboard/vendor-chat', icon: MessageSquare },
   { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCart },
   { name: 'Users', href: '/dashboard/users', icon: Users },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
