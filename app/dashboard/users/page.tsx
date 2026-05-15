@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Shield, ToggleLeft, ToggleRight, Users } from 'lucide-react';
+import { Eye, Loader2, Shield, ToggleLeft, ToggleRight, Users } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
+import UserDetailsModal from '../../../components/user-details-modal';
 import { adminAPI, extractApiError } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
-import { UserManagementData } from '../../../lib/types';
+import { UserDetailsData, UserManagementData } from '../../../lib/types';
 
 export default function UsersPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -14,6 +15,10 @@ export default function UsersPage() {
   const [data, setData] = useState<UserManagementData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [userDetails, setUserDetails] = useState<UserDetailsData | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
 
   async function fetchUsers() {
     try {
@@ -25,6 +30,21 @@ export default function UsersPage() {
       setError(extractApiError(usersError, 'Failed to load users'));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function openUserDetails(id: string) {
+    try {
+      setSelectedUserId(id);
+      setDetailsLoading(true);
+      setDetailsError('');
+      setUserDetails(null);
+      const response = await adminAPI.getUserDetails(id);
+      setUserDetails(response.data.data);
+    } catch (detailsErr) {
+      setDetailsError(extractApiError(detailsErr, 'Failed to load user details'));
+    } finally {
+      setDetailsLoading(false);
     }
   }
 
@@ -47,6 +67,9 @@ export default function UsersPage() {
     try {
       await adminAPI.updateUserStatus(id, !is_active);
       await fetchUsers();
+      if (selectedUserId === id) {
+        await openUserDetails(id);
+      }
     } catch (updateError) {
       setError(extractApiError(updateError, 'Failed to update user status'));
     }
@@ -78,7 +101,7 @@ export default function UsersPage() {
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h1 className="text-xl font-semibold text-slate-900">User management</h1>
-              <p className="text-sm text-slate-500">Review active accounts and admin roles.</p>
+              <p className="text-sm text-slate-500">Use View to inspect the complete account details for a user.</p>
             </div>
             <div className="rounded-2xl bg-blue-50 p-3 text-blue-700"><Users className="h-5 w-5" /></div>
           </div>
@@ -101,16 +124,35 @@ export default function UsersPage() {
                     </div>
                     <p className="mt-3 text-xs uppercase tracking-[0.25em] text-slate-400">{user.role}</p>
                   </div>
-                  <button onClick={() => toggleUser(user.id, Boolean(user.is_active))} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-                    {user.is_active ? <ToggleRight className="h-5 w-5 text-emerald-600" /> : <ToggleLeft className="h-5 w-5 text-slate-400" />}
-                    {user.is_active ? 'Set inactive' : 'Set active'}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => void openUserDetails(user.id)} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                      <Eye className="h-4 w-4" />
+                      View
+                    </button>
+                    <button onClick={() => toggleUser(user.id, Boolean(user.is_active))} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                      {user.is_active ? <ToggleRight className="h-5 w-5 text-emerald-600" /> : <ToggleLeft className="h-5 w-5 text-slate-400" />}
+                      {user.is_active ? 'Set inactive' : 'Set active'}
+                    </button>
+                  </div>
                 </article>
               )) : <p className="rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">No users found.</p>}
             </div>
           )}
         </section>
       </div>
+
+      {selectedUserId ? (
+        <UserDetailsModal
+          data={userDetails}
+          loading={detailsLoading}
+          error={detailsError}
+          onClose={() => {
+            setSelectedUserId(null);
+            setUserDetails(null);
+            setDetailsError('');
+          }}
+        />
+      ) : null}
     </DashboardLayout>
   );
 }
