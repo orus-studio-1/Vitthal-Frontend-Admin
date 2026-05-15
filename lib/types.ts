@@ -127,6 +127,66 @@ export interface Vendor {
   order_count?: number;
 }
 
+export type VendorQuotationStatus =
+  | 'sent'
+  | 'vendor_opened'
+  | 'vendor_approved'
+  | 'vendor_rejected'
+  | 'admin_approved'
+  | 'admin_rejected';
+
+export interface VendorQuotation {
+  id: string;
+  quotation_number: string;
+  vendor_id: string;
+  created_by_admin_id: string;
+  sent_to_email: string;
+  title: string;
+  quantity: number;
+  unit: string;
+  target_price: number | null;
+  requested_moq: number | null;
+  request_notes: string | null;
+  validity_date: string | null;
+  status: VendorQuotationStatus;
+  vendor_price: number | null;
+  vendor_moq: number | null;
+  vendor_notes: string | null;
+  admin_signature_data: string;
+  vendor_signature_data: string | null;
+  token_expires_at: string;
+  vendor_opened_at: string | null;
+  vendor_responded_at: string | null;
+  vendor_response_ip: string | null;
+  vendor_response_user_agent: string | null;
+  admin_reviewed_at: string | null;
+  reviewed_by_admin_id: string | null;
+  admin_review_notes: string | null;
+  vendor_rejection_reason: string | null;
+  email_sent_at: string | null;
+  email_last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  vendor_name: string;
+  vendor_email: string;
+  vendor_phone: string | null;
+  company_name: string;
+  created_by_admin_name: string;
+  created_by_admin_email: string;
+}
+
+export interface CreateVendorQuotationPayload {
+  vendorId: string;
+  title: string;
+  quantity: number;
+  unit: string;
+  targetPrice?: number | null;
+  requestedMoq?: number | null;
+  requestNotes?: string;
+  validityDate?: string | null;
+  adminSignatureData?: string;
+}
+
 export interface VendorFormData {
   name: string;
   email: string;

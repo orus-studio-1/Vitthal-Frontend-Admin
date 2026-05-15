@@ -15,6 +15,8 @@ import {
   UserManagementData,
   Vendor,
   VendorInsightsData,
+  VendorQuotation,
+  CreateVendorQuotationPayload,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000';
@@ -164,6 +166,23 @@ export const adminAPI = {
 
   sendVendorChatMessage: (vendorId: string, body: string) =>
     api.post<ApiResponse<AdminVendorChatConversation['messages'][number]>>(`/api/admin/vendor-chats/${vendorId}`, { body }),
+};
+
+export const quotationAPI = {
+  create: (data: CreateVendorQuotationPayload) =>
+    api.post<ApiResponse<{ quotation: VendorQuotation; vendorLink: string }>>('/api/quotations/admin', data),
+
+  getAll: () =>
+    api.get<ApiResponse<VendorQuotation[]>>('/api/quotations/admin'),
+
+  getById: (id: string) =>
+    api.get<ApiResponse<VendorQuotation>>(`/api/quotations/admin/${id}`),
+
+  review: (id: string, decision: 'approved' | 'rejected', adminReviewNotes?: string) =>
+    api.put<ApiResponse<VendorQuotation>>(`/api/quotations/admin/${id}/review`, { decision, adminReviewNotes }),
+
+  getPdfUrl: (id: string) =>
+    `${API_BASE_URL}/api/quotations/admin/${id}/pdf`,
 };
 
 export default api;

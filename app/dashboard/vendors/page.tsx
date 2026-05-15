@@ -2,12 +2,32 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, CheckCircle2, Eye, Loader2, ToggleLeft, ToggleRight, XCircle } from 'lucide-react';
+import { Building2, CheckCircle2, Eye, FileText, Loader2, Send, ToggleLeft, ToggleRight, X, XCircle } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import VendorInsightsModal from '../../../components/vendor-insights-modal';
-import { extractApiError, vendorAPI } from '../../../lib/api';
+import { extractApiError, quotationAPI, vendorAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
-import { Vendor, VendorInsightsData } from '../../../lib/types';
+import { CreateVendorQuotationPayload, Vendor, VendorInsightsData } from '../../../lib/types';
+
+type QuotationFormState = {
+  title: string;
+  quantity: string;
+  unit: string;
+  targetPrice: string;
+  requestedMoq: string;
+  requestNotes: string;
+  validityDate: string;
+};
+
+const defaultQuotationForm: QuotationFormState = {
+  title: '',
+  quantity: '',
+  unit: 'kg',
+  targetPrice: '',
+  requestedMoq: '',
+  requestNotes: '',
+  validityDate: '',
+};
 
 export default function VendorsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -20,6 +40,10 @@ export default function VendorsPage() {
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState('');
   const [timeframe, setTimeframe] = useState<'month' | '6months' | 'year'>('year');
+  const [quotationVendor, setQuotationVendor] = useState<Vendor | null>(null);
+  const [quotationForm, setQuotationForm] = useState<QuotationFormState>(defaultQuotationForm);
+  const [quotationSubmitting, setQuotationSubmitting] = useState(false);
+  const [quotationFeedback, setQuotationFeedback] = useState<{ type: 'success' | 'error'; text: string; link?: string } | null>(null);
 
   async function fetchVendors() {
     try {
@@ -92,6 +116,69 @@ export default function VendorsPage() {
     await loadVendorInsights(vendor, timeframe);
   };
 
+  const openQuotationModal = (vendor: Vendor) => {
+    setQuotationVendor(vendor);
+    setQuotationFeedback(null);
+    setQuotationForm({
+      title: `${vendor.company_name} quotation request`,
+      quantity: '',
+      unit: 'kg',
+      targetPrice: '',
+      requestedMoq: '',
+      requestNotes: '',
+      validityDate: '',
+    });
+  };
+
+  const closeQuotationModal = () => {
+    if (quotationSubmitting) return;
+    setQuotationVendor(null);
+    setQuotationForm(defaultQuotationForm);
+  };
+
+  const handleQuotationSubmit = async () => {
+    if (!quotationVendor) return;
+
+    try {
+      setQuotationSubmitting(true);
+      setQuotationFeedback(null);
+
+      const payload: CreateVendorQuotationPayload = {
+        vendorId: quotationVendor.id,
+        title: quotationForm.title.trim(),
+        quantity: Number(quotationForm.quantity),
+        unit: quotationForm.unit.trim(),
+        requestNotes: quotationForm.requestNotes.trim() || undefined,
+        validityDate: quotationForm.validityDate ? new Date(quotationForm.validityDate).toISOString() : null,
+      };
+
+      if (quotationForm.targetPrice.trim()) {
+        payload.targetPrice = Number(quotationForm.targetPrice);
+      }
+
+      if (quotationForm.requestedMoq.trim()) {
+        payload.requestedMoq = Number(quotationForm.requestedMoq);
+      }
+
+      const response = await quotationAPI.create(payload);
+      setQuotationFeedback({
+        type: 'success',
+        text: response.data.message || 'Quotation sent successfully.',
+        link: response.data.data.vendorLink,
+      });
+      setQuotationVendor(null);
+      setQuotationForm(defaultQuotationForm);
+      router.push('/dashboard/quotations');
+    } catch (quotationError) {
+      setQuotationFeedback({
+        type: 'error',
+        text: extractApiError(quotationError, 'Failed to send quotation'),
+      });
+    } finally {
+      setQuotationSubmitting(false);
+    }
+  };
+
   if (authLoading || !isAuthenticated) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-100"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>;
   }
@@ -111,6 +198,14 @@ export default function VendorsPage() {
           </div>
 
           {error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+          {quotationFeedback ? (
+            <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm ${quotationFeedback.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+              <p>{quotationFeedback.text}</p>
+              {quotationFeedback.link ? (
+                <p className="mt-1 break-all text-xs text-emerald-700/90">{quotationFeedback.link}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           {loading ? (
             <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>
@@ -151,9 +246,18 @@ export default function VendorsPage() {
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Vendor list</h2>
-              <p className="text-sm text-slate-500">Use View to inspect the same dashboard analytics the vendor sees in their own account.</p>
+              <p className="text-sm text-slate-500">Use View to inspect vendor analytics, or send a one-time quotation directly from the vendor card.</p>
             </div>
-            <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{vendors.length} vendors</div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/dashboard/quotations')}
+                className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <FileText className="h-4 w-4" />
+                Review quotations
+              </button>
+              <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{vendors.length} vendors</div>
+            </div>
           </div>
 
           {loading ? (
@@ -183,6 +287,13 @@ export default function VendorsPage() {
                       <button onClick={() => void openVendorView(vendor)} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
                         <Eye className="h-4 w-4" />
                         View
+                      </button>
+                      <button
+                        onClick={() => openQuotationModal(vendor)}
+                        className="flex items-center gap-2 rounded-2xl border border-blue-200 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                      >
+                        <Send className="h-4 w-4" />
+                        Send quotation
                       </button>
                       {vendor.approval_status !== 'approved' ? (
                         <button onClick={() => reviewVendor(vendor.id, 'approved')} className="flex items-center gap-2 rounded-2xl border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
@@ -223,6 +334,124 @@ export default function VendorsPage() {
           }}
           onTimeframeChange={(value) => setTimeframe(value)}
         />
+      ) : null}
+
+      {quotationVendor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8">
+          <div className="w-full max-w-2xl rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-slate-500">One-time quotation</p>
+                <h3 className="mt-2 text-xl font-semibold text-slate-900">{quotationVendor.company_name}</h3>
+                <p className="mt-1 text-sm text-slate-500">{quotationVendor.name} • {quotationVendor.email}</p>
+              </div>
+              <button onClick={closeQuotationModal} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium text-slate-700">Quotation title</span>
+                <input
+                  value={quotationForm.title}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, title: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-0 transition focus:border-blue-400"
+                  placeholder="Enter quotation title"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Quantity</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={quotationForm.quantity}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, quantity: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                  placeholder="1000"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Unit</span>
+                <input
+                  value={quotationForm.unit}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, unit: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                  placeholder="kg"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Target price</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={quotationForm.targetPrice}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, targetPrice: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                  placeholder="720"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Requested MOQ</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={quotationForm.requestedMoq}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, requestedMoq: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                  placeholder="500"
+                />
+              </label>
+
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium text-slate-700">Validity date</span>
+                <input
+                  type="date"
+                  value={quotationForm.validityDate}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, validityDate: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium text-slate-700">Request notes</span>
+                <textarea
+                  value={quotationForm.requestNotes}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, requestNotes: event.target.value }))}
+                  className="min-h-32 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                  placeholder="Describe the requirement, delivery expectations, packaging notes, or any special commercial request."
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-200 px-6 py-5">
+              <p className="max-w-md text-xs text-slate-500">The vendor will receive a PDF attachment plus a secure signing link. Their response will appear in the quotations review screen.</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={closeQuotationModal}
+                  className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void handleQuotationSubmit()}
+                  disabled={quotationSubmitting}
+                  className="flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-medium text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {quotationSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send quotation
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
     </DashboardLayout>
   );
