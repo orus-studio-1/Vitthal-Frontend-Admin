@@ -215,8 +215,15 @@ export default function VendorsPage() {
                 <article key={vendor.id} className="rounded-2xl border border-slate-200 p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                      <h3 className="font-semibold text-slate-900">{vendor.company_name}</h3>
-                      <p className="text-sm text-slate-500">{vendor.name} • {vendor.email}</p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h3 className="font-semibold text-slate-900">{vendor.company_name}</h3>
+                        {vendor.application_number && (
+                          <span className="rounded-2xl bg-blue-50 border border-blue-200/60 px-2.5 py-0.5 font-mono text-xs font-semibold text-blue-700">
+                            {vendor.application_number}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-500">{vendor.name} • {vendor.email}</p>
                       <p className="mt-2 text-sm text-slate-600">{vendor.phone || 'No phone'} {vendor.gst_number ? `• ${vendor.gst_number}` : ''}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -271,8 +278,15 @@ export default function VendorsPage() {
                       <div className="flex items-center gap-3">
                         <div className="rounded-2xl bg-blue-50 p-3 text-blue-700"><Building2 className="h-5 w-5" /></div>
                         <div>
-                          <h3 className="font-semibold text-slate-900">{vendor.company_name}</h3>
-                          <p className="text-sm text-slate-500">{vendor.name} • {vendor.email}</p>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <h3 className="font-semibold text-slate-900">{vendor.company_name}</h3>
+                            {vendor.application_number && (
+                              <span className="rounded-2xl bg-blue-50 border border-blue-200/60 px-2.5 py-0.5 font-mono text-xs font-semibold text-blue-700">
+                                {vendor.application_number}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500">{vendor.name} • {vendor.email}</p>
                         </div>
                       </div>
                       <p className="mt-3 text-sm text-slate-600">{vendor.phone || 'No phone'} {vendor.gst_number ? `• ${vendor.gst_number}` : ''}</p>

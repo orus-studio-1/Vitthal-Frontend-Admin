@@ -120,6 +120,7 @@ export interface Vendor {
   pincode?: string | null;
   approval_status: ApprovalStatus;
   approval_notes?: string | null;
+  application_number?: string | null;
   is_active: boolean;
   is_blocked: boolean;
   created_at: string;
