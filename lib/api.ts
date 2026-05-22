@@ -185,4 +185,15 @@ export const quotationAPI = {
     `${API_BASE_URL}/api/quotations/admin/${id}/pdf`,
 };
 
+export const clientQuotationAPI = {
+  getAll: () =>
+    api.get<ApiResponse<any[]>>('/api/client-quotations'),
+
+  getById: (id: string) =>
+    api.get<ApiResponse<any>>(`/api/client-quotations/${id}`),
+
+  sendConfirmation: (id: string, message: string) =>
+    api.post<ApiResponse<any>>(`/api/client-quotations/${id}/confirm`, { message }),
+};
+
 export default api;

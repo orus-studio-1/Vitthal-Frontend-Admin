@@ -24,6 +24,7 @@ const navigation = [
   { name: 'Vendors', href: '/dashboard/vendors', icon: Building2 },
   { name: 'Vendor Chat', href: '/dashboard/vendor-chat', icon: MessageSquare },
   { name: 'Quotations', href: '/dashboard/quotations', icon: FileText },
+  { name: 'Client Quotations', href: '/dashboard/client-quotations', icon: FileText },
   { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCart },
   { name: 'Users', href: '/dashboard/users', icon: Users },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
