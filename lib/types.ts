@@ -20,6 +20,7 @@ export interface User {
 export interface LoginCredentials {
   email: string;
   password: string;
+  role?: UserRole;
 }
 
 export interface RegisterData {

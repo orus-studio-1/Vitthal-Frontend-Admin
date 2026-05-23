@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await authAPI.login({ email, password });
+      const response = await authAPI.login({ email, password, role: 'admin' });
       const normalized = normalizeUser(response.data);
       if (!normalized) {
         throw new Error('Only admin accounts can access this dashboard');
