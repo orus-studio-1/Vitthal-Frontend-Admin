@@ -13,6 +13,7 @@ import {
   User,
   UserDetailsData,
   UserManagementData,
+  OrderProductVendorOption,
   Vendor,
   VendorInsightsData,
   VendorQuotation,
@@ -126,6 +127,9 @@ export const orderAPI = {
   }) => api.post<ApiResponse<Order>>('/api/orders', data),
 
   getAll: () => api.get<ApiResponse<Order[]>>('/api/orders'),
+
+  getProductVendors: (productId: string) =>
+    api.get<ApiResponse<OrderProductVendorOption[]>>(`/api/orders/products/${productId}/vendors`),
 
   updateStatus: (id: string, status: OrderStatus) =>
     api.patch<ApiResponse<Order>>(`/api/orders/${id}/status`, { status }),
