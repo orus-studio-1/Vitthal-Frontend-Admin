@@ -2,29 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Loader2, Package2, Plus, ShieldAlert, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Package2, ShieldAlert, Trash2, XCircle } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, productAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
-import { Product, ProductCategory, ProductFormData } from '../../../lib/types';
-
-const productCategories: ProductCategory[] = ['Plastic', 'Metal'];
-
-const initialForm: ProductFormData = {
-  name: '',
-  description: '',
-  category: 'Plastic',
-  productType: '',
-  specifications: '{"grade":"premium"}',
-};
+import { Product } from '../../../lib/types';
 
 export default function ProductsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
-  const [form, setForm] = useState<ProductFormData>(initialForm);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   async function fetchProducts() {
@@ -55,22 +43,6 @@ export default function ProductsPage() {
     }
   }, [authLoading, isAuthenticated, router]);
 
-  const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setError('');
-
-    try {
-      await productAPI.create(form);
-      setForm(initialForm);
-      await fetchProducts();
-    } catch (createError) {
-      setError(extractApiError(createError, 'Failed to create product'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleDelete = async (id: string) => {
     try {
       await productAPI.delete(id);
@@ -99,52 +71,8 @@ export default function ProductsPage() {
 
   return (
     <DashboardLayout>
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)] backdrop-blur-sm">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="rounded-2xl bg-[rgba(31,76,69,0.1)] p-3 text-[var(--primary)]"><Plus className="h-5 w-5" /></div>
-            <div>
-              <h1 className="text-xl font-semibold text-slate-900">Create product</h1>
-              <p className="text-sm text-slate-500">Admin-created products go live immediately. Vendor-created ones appear in the review queue below.</p>
-            </div>
-          </div>
-
-          <form className="space-y-4" onSubmit={handleCreate}>
-            <div>
-              <label className="form-label">Name</label>
-              <input className="form-input" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
-            </div>
-            <div>
-              <label className="form-label">Description</label>
-              <textarea className="form-input min-h-28" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} required />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="form-label">Category</label>
-                <select className="form-input" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as ProductCategory })} required>
-                  {productCategories.map((category) => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="form-label">Product Type</label>
-                <input className="form-input" value={form.productType} onChange={(event) => setForm({ ...form, productType: event.target.value })} placeholder="granules / sheets" required />
-              </div>
-            </div>
-            <div>
-              <label className="form-label">Specifications JSON</label>
-              <textarea className="form-input min-h-32 font-mono text-sm" value={form.specifications} onChange={(event) => setForm({ ...form, specifications: event.target.value })} required />
-            </div>
-
-            {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-
-            <button type="submit" disabled={submitting} className="btn-primary rounded-2xl py-3 disabled:opacity-60">
-              {submitting ? 'Creating...' : 'Create product'}
-            </button>
-          </form>
-        </section>
-
+      <div className="space-y-6">
+        {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         <section className="space-y-6">
           <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)] backdrop-blur-sm">
             <div className="mb-6 flex items-center justify-between">
@@ -202,7 +130,7 @@ export default function ProductsPage() {
                 <div>
                   <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-800">
                     <Package2 className="h-4 w-4" />
-                    Admin created
+                    Existing admin-created products
                   </div>
                   <div className="space-y-4">
                     {adminProducts.length ? adminProducts.map((product) => (

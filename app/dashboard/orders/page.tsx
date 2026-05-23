@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Search, ShoppingBag, ShoppingCart, X } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
-import { extractApiError, orderAPI, productAPI, vendorAPI } from '../../../lib/api';
+import { extractApiError, orderAPI, productAPI, quotationAPI, vendorAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
-import { Order, OrderFormData, OrderStatus, Product, Vendor } from '../../../lib/types';
+import { CreateVendorQuotationPayload, Order, OrderFormData, OrderProductVendorOption, OrderStatus, Product, Vendor } from '../../../lib/types';
 
 const orderStatuses: OrderStatus[] = [
   'pending',
@@ -38,12 +38,14 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [productVendors, setProductVendors] = useState<OrderProductVendorOption[]>([]);
   const [form, setForm] = useState<OrderFormData>(initialForm);
   const [productSearch, setProductSearch] = useState('');
   const [orderingProduct, setOrderingProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [vendorOptionsLoading, setVendorOptionsLoading] = useState(false);
 
   async function loadData() {
     try {
@@ -94,6 +96,7 @@ export default function OrdersPage() {
 
   const handleOpenCheckout = (product: Product) => {
     setOrderingProduct(product);
+    setProductVendors([]);
     setForm((current) => ({
       ...initialForm,
       customer_name: current.customer_name,
@@ -108,12 +111,35 @@ export default function OrdersPage() {
       product_id: product.id,
     }));
     setError('');
+    void loadProductVendors(product.id);
   };
 
   const handleCloseCheckout = () => {
     setOrderingProduct(null);
+    setProductVendors([]);
     setForm((current) => ({ ...current, product_id: '', vendor_id: '', quantity: '1', total_amount: '' }));
   };
+
+  const loadProductVendors = async (productId: string) => {
+    try {
+      setVendorOptionsLoading(true);
+      const response = await orderAPI.getProductVendors(productId);
+      setProductVendors(response.data.data);
+    } catch (loadError) {
+      setError(extractApiError(loadError, 'Failed to load vendors for this product'));
+    } finally {
+      setVendorOptionsLoading(false);
+    }
+  };
+
+  const selectedProductVendor = productVendors.find((vendor) => vendor.id === form.vendor_id) || null;
+  const quantityNumber = Number(form.quantity || 0);
+  const requiresQuotation = Boolean(
+    selectedProductVendor &&
+    selectedProductVendor.quotation_enabled &&
+    selectedProductVendor.quotation_min_qty !== null &&
+    quantityNumber >= selectedProductVendor.quotation_min_qty
+  );
 
   const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -142,9 +168,46 @@ export default function OrdersPage() {
       });
       setForm(initialForm);
       setOrderingProduct(null);
+      setProductVendors([]);
       await loadData();
     } catch (createError) {
       setError(extractApiError(createError, 'Failed to create order'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSendQuotation = async () => {
+    if (!orderingProduct || !selectedProductVendor) {
+      setError('Select a product vendor first.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setError('');
+
+      const payload: CreateVendorQuotationPayload = {
+        vendorId: selectedProductVendor.id,
+        quotationKind: 'order_request',
+        productId: orderingProduct.id,
+        title: `${orderingProduct.name} quotation request`,
+        quantity: quantityNumber,
+        unit: 'units',
+        requestNotes: form.order_notes.trim() || undefined,
+      };
+
+      if (form.total_amount.trim()) {
+        payload.targetPrice = Number(form.total_amount) / quantityNumber;
+      }
+
+      await quotationAPI.create(payload);
+      setForm(initialForm);
+      setOrderingProduct(null);
+      setProductVendors([]);
+      router.push('/dashboard/quotations');
+    } catch (quotationError) {
+      setError(extractApiError(quotationError, 'Failed to send quotation request'));
     } finally {
       setSubmitting(false);
     }
@@ -322,17 +385,22 @@ export default function OrdersPage() {
                 </div>
                 <div>
                   <label className="form-label">Total amount</label>
-                  <input type="number" min="0" step="0.01" className="form-input" value={form.total_amount} onChange={(event) => setForm({ ...form, total_amount: event.target.value })} required />
+                  <input type="number" min="0" step="0.01" className="form-input" value={form.total_amount} onChange={(event) => setForm({ ...form, total_amount: event.target.value })} required={!requiresQuotation} />
                 </div>
               </div>
 
-              <div>
-                <label className="form-label">Vendor</label>
-                <select className="form-input" value={form.vendor_id} onChange={(event) => setForm({ ...form, vendor_id: event.target.value })} required>
-                  <option value="">Select vendor</option>
-                  {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.company_name}</option>)}
-                </select>
-              </div>
+                <div>
+                  <label className="form-label">Vendor</label>
+                  <select className="form-input" value={form.vendor_id} onChange={(event) => setForm({ ...form, vendor_id: event.target.value })} required>
+                    <option value="">Select vendor</option>
+                    {productVendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.company_name}</option>)}
+                  </select>
+                  {vendorOptionsLoading ? <p className="mt-2 text-xs text-slate-500">Loading product vendors...</p> : null}
+                  {!vendorOptionsLoading && orderingProduct && !productVendors.length ? <p className="mt-2 text-xs text-red-600">No active approved vendors list this product.</p> : null}
+                  {selectedProductVendor?.quotation_enabled && selectedProductVendor.quotation_min_qty !== null ? (
+                    <p className="mt-2 text-xs text-amber-700">Quotation required for {selectedProductVendor.quotation_min_qty}+ units from this vendor.</p>
+                  ) : null}
+                </div>
 
               <div>
                 <label className="form-label">Address line</label>
@@ -370,9 +438,15 @@ export default function OrdersPage() {
                 <button type="button" onClick={handleCloseCheckout} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
                   Cancel
                 </button>
-                <button type="submit" disabled={submitting} className="rounded-2xl bg-blue-700 px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
-                  {submitting ? 'Creating...' : 'Place order'}
-                </button>
+                {requiresQuotation ? (
+                  <button type="button" onClick={() => void handleSendQuotation()} disabled={submitting || !selectedProductVendor} className="rounded-2xl bg-blue-700 px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
+                    {submitting ? 'Sending...' : 'Send quotation'}
+                  </button>
+                ) : (
+                  <button type="submit" disabled={submitting || !selectedProductVendor} className="rounded-2xl bg-blue-700 px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
+                    {submitting ? 'Creating...' : 'Place order'}
+                  </button>
+                )}
               </div>
             </form>
           </div>

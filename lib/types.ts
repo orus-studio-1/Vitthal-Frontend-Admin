@@ -5,7 +5,7 @@ export interface ApiResponse<T = unknown> {
 
 export type UserRole = 'client' | 'vendor' | 'admin' | 'super_admin';
 export type ProductCategory = 'Plastic' | 'Metal';
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type ApprovalStatus = 'pending' | 'agreement_sent' | 'approved' | 'rejected';
 
 export interface User {
   id: string;
@@ -139,7 +139,9 @@ export type VendorQuotationStatus =
 export interface VendorQuotation {
   id: string;
   quotation_number: string;
+  quotation_kind: 'vendor_agreement' | 'order_request';
   vendor_id: string;
+  product_id: string | null;
   created_by_admin_id: string;
   sent_to_email: string;
   title: string;
@@ -178,6 +180,8 @@ export interface VendorQuotation {
 
 export interface CreateVendorQuotationPayload {
   vendorId: string;
+  quotationKind?: 'vendor_agreement' | 'order_request';
+  productId?: string;
   title: string;
   quantity: number;
   unit: string;
@@ -186,6 +190,16 @@ export interface CreateVendorQuotationPayload {
   requestNotes?: string;
   validityDate?: string | null;
   adminSignatureData?: string;
+}
+
+export interface OrderProductVendorOption {
+  id: string;
+  company_name: string;
+  price: number;
+  moq: number;
+  stock_quantity: number;
+  quotation_enabled: boolean;
+  quotation_min_qty: number | null;
 }
 
 export interface VendorFormData {

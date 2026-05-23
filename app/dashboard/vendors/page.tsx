@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, CheckCircle2, Eye, FileText, Loader2, Send, ToggleLeft, ToggleRight, X, XCircle } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import VendorInsightsModal from '../../../components/vendor-insights-modal';
 import { extractApiError, quotationAPI, vendorAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
-import { CreateVendorQuotationPayload, Vendor, VendorInsightsData } from '../../../lib/types';
+import { CreateVendorQuotationPayload, Vendor, VendorInsightsData, VendorQuotation } from '../../../lib/types';
 
 type QuotationFormState = {
   title: string;
@@ -33,6 +33,7 @@ export default function VendorsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [quotations, setQuotations] = useState<VendorQuotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
@@ -49,8 +50,12 @@ export default function VendorsPage() {
     try {
       setLoading(true);
       setError('');
-      const response = await vendorAPI.getAll();
-      setVendors(response.data.data);
+      const [vendorsResponse, quotationsResponse] = await Promise.all([
+        vendorAPI.getAll(),
+        quotationAPI.getAll(),
+      ]);
+      setVendors(vendorsResponse.data.data);
+      setQuotations(quotationsResponse.data.data);
     } catch (vendorsError) {
       setError(extractApiError(vendorsError, 'Failed to load vendors'));
     } finally {
@@ -120,7 +125,7 @@ export default function VendorsPage() {
     setQuotationVendor(vendor);
     setQuotationFeedback(null);
     setQuotationForm({
-      title: `${vendor.company_name} quotation request`,
+      title: `${vendor.company_name} vendor agreement`,
       quantity: '',
       unit: 'kg',
       targetPrice: '',
@@ -145,6 +150,7 @@ export default function VendorsPage() {
 
       const payload: CreateVendorQuotationPayload = {
         vendorId: quotationVendor.id,
+        quotationKind: 'vendor_agreement',
         title: quotationForm.title.trim(),
         quantity: Number(quotationForm.quantity),
         unit: quotationForm.unit.trim(),
@@ -163,7 +169,7 @@ export default function VendorsPage() {
       const response = await quotationAPI.create(payload);
       setQuotationFeedback({
         type: 'success',
-        text: response.data.message || 'Quotation sent successfully.',
+        text: response.data.message || 'Agreement sent successfully.',
         link: response.data.data.vendorLink,
       });
       setQuotationVendor(null);
@@ -172,18 +178,43 @@ export default function VendorsPage() {
     } catch (quotationError) {
       setQuotationFeedback({
         type: 'error',
-        text: extractApiError(quotationError, 'Failed to send quotation'),
+        text: extractApiError(quotationError, 'Failed to send agreement'),
       });
     } finally {
       setQuotationSubmitting(false);
     }
   };
 
+  const agreementQuotations = useMemo(
+    () => quotations.filter((quotation) => quotation.quotation_kind === 'vendor_agreement'),
+    [quotations]
+  );
+  const latestAgreementByVendor = useMemo(
+    () =>
+      agreementQuotations.reduce<Record<string, VendorQuotation>>((accumulator, quotation) => {
+        const current = accumulator[quotation.vendor_id];
+        if (!current || new Date(quotation.created_at).getTime() > new Date(current.created_at).getTime()) {
+          accumulator[quotation.vendor_id] = quotation;
+        }
+        return accumulator;
+      }, {}),
+    [agreementQuotations]
+  );
+  const reviewPendingVendors = vendors.filter((vendor) => vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent');
+  const getAgreementForVendor = (vendorId: string) => latestAgreementByVendor[vendorId] || null;
+  const canSendAgreement = (vendor: Vendor) => vendor.approval_status === 'pending' && !getAgreementForVendor(vendor.id);
+  const canApproveVendor = (vendor: Vendor) => {
+    const agreement = getAgreementForVendor(vendor.id);
+    return vendor.approval_status === 'agreement_sent' && Boolean(agreement && ['vendor_approved', 'vendor_rejected'].includes(agreement.status));
+  };
+  const canRejectVendor = (vendor: Vendor) => {
+    const agreement = getAgreementForVendor(vendor.id);
+    return vendor.approval_status === 'agreement_sent' && Boolean(agreement && ['vendor_approved', 'vendor_rejected'].includes(agreement.status));
+  };
+
   if (authLoading || !isAuthenticated) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-100"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>;
   }
-
-  const pendingVendors = vendors.filter((vendor) => vendor.approval_status === 'pending');
 
   return (
     <DashboardLayout>
@@ -194,7 +225,7 @@ export default function VendorsPage() {
               <h1 className="text-xl font-semibold text-slate-900">Pending approvals</h1>
               <p className="text-sm text-slate-500">New vendor signups from the frontend arrive here for review.</p>
             </div>
-            <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{pendingVendors.length} pending</div>
+            <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{reviewPendingVendors.length} pending</div>
           </div>
 
           {error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
@@ -209,9 +240,12 @@ export default function VendorsPage() {
 
           {loading ? (
             <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>
-          ) : pendingVendors.length ? (
+          ) : reviewPendingVendors.length ? (
             <div className="space-y-4">
-              {pendingVendors.map((vendor) => (
+              {reviewPendingVendors.map((vendor) => {
+                const agreement = getAgreementForVendor(vendor.id);
+
+                return (
                 <article key={vendor.id} className="rounded-2xl border border-slate-200 p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
@@ -225,24 +259,37 @@ export default function VendorsPage() {
                       </div>
                       <p className="mt-1 text-sm text-slate-500">{vendor.name} • {vendor.email}</p>
                       <p className="mt-2 text-sm text-slate-600">{vendor.phone || 'No phone'} {vendor.gst_number ? `• ${vendor.gst_number}` : ''}</p>
+                      {agreement ? (
+                        <p className="mt-2 text-xs text-slate-500">Agreement status: {agreement.status.replaceAll('_', ' ')}</p>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button onClick={() => void openVendorView(vendor)} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
                         <Eye className="h-4 w-4" />
                         View
                       </button>
-                      <button onClick={() => reviewVendor(vendor.id, 'approved')} className="flex items-center gap-2 rounded-2xl border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Approve
-                      </button>
-                      <button onClick={() => reviewVendor(vendor.id, 'rejected')} className="flex items-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50">
-                        <XCircle className="h-4 w-4" />
-                        Reject
-                      </button>
+                      {canSendAgreement(vendor) ? (
+                        <button onClick={() => openQuotationModal(vendor)} className="flex items-center gap-2 rounded-2xl border border-blue-200 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-50">
+                          <Send className="h-4 w-4" />
+                          Send agreement
+                        </button>
+                      ) : null}
+                      {canApproveVendor(vendor) ? (
+                        <button onClick={() => reviewVendor(vendor.id, 'approved')} className="flex items-center gap-2 rounded-2xl border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Approve
+                        </button>
+                      ) : null}
+                      {canRejectVendor(vendor) ? (
+                        <button onClick={() => reviewVendor(vendor.id, 'rejected')} className="flex items-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50">
+                          <XCircle className="h-4 w-4" />
+                          Reject
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </article>
-              ))}
+              )})}
             </div>
           ) : (
             <p className="rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">No vendors are waiting for approval.</p>
@@ -253,7 +300,7 @@ export default function VendorsPage() {
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Vendor list</h2>
-              <p className="text-sm text-slate-500">Use View to inspect vendor analytics, or send a one-time quotation directly from the vendor card.</p>
+              <p className="text-sm text-slate-500">Use View to inspect vendor analytics, or send a one-time agreement directly from the vendor card.</p>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -302,20 +349,22 @@ export default function VendorsPage() {
                         <Eye className="h-4 w-4" />
                         View
                       </button>
-                      <button
-                        onClick={() => openQuotationModal(vendor)}
-                        className="flex items-center gap-2 rounded-2xl border border-blue-200 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-50"
-                      >
-                        <Send className="h-4 w-4" />
-                        Send quotation
-                      </button>
-                      {vendor.approval_status !== 'approved' ? (
+                      {canSendAgreement(vendor) ? (
+                        <button
+                          onClick={() => openQuotationModal(vendor)}
+                          className="flex items-center gap-2 rounded-2xl border border-blue-200 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                        >
+                          <Send className="h-4 w-4" />
+                          Send agreement
+                        </button>
+                      ) : null}
+                      {canApproveVendor(vendor) ? (
                         <button onClick={() => reviewVendor(vendor.id, 'approved')} className="flex items-center gap-2 rounded-2xl border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
                           <CheckCircle2 className="h-4 w-4" />
                           Approve
                         </button>
                       ) : null}
-                      {vendor.approval_status !== 'rejected' ? (
+                      {canRejectVendor(vendor) ? (
                         <button onClick={() => reviewVendor(vendor.id, 'rejected')} className="flex items-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50">
                           <XCircle className="h-4 w-4" />
                           Reject
@@ -355,7 +404,7 @@ export default function VendorsPage() {
           <div className="w-full max-w-2xl rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
               <div>
-                <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-slate-500">One-time quotation</p>
+                <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-slate-500">One-time agreement</p>
                 <h3 className="mt-2 text-xl font-semibold text-slate-900">{quotationVendor.company_name}</h3>
                 <p className="mt-1 text-sm text-slate-500">{quotationVendor.name} • {quotationVendor.email}</p>
               </div>
@@ -366,12 +415,12 @@ export default function VendorsPage() {
 
             <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
               <label className="space-y-2 sm:col-span-2">
-                <span className="text-sm font-medium text-slate-700">Quotation title</span>
+                <span className="text-sm font-medium text-slate-700">Agreement title</span>
                 <input
                   value={quotationForm.title}
                   onChange={(event) => setQuotationForm((current) => ({ ...current, title: event.target.value }))}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-0 transition focus:border-blue-400"
-                  placeholder="Enter quotation title"
+                  placeholder="Enter agreement title"
                 />
               </label>
 
@@ -446,7 +495,7 @@ export default function VendorsPage() {
             </div>
 
             <div className="flex items-center justify-between border-t border-slate-200 px-6 py-5">
-              <p className="max-w-md text-xs text-slate-500">The vendor will receive a PDF attachment plus a secure signing link. Their response will appear in the quotations review screen.</p>
+              <p className="max-w-md text-xs text-slate-500">The vendor will receive a PDF attachment plus a secure signing link. Once the vendor responds, approval will unlock here.</p>
               <div className="flex items-center gap-3">
                 <button
                   onClick={closeQuotationModal}
@@ -460,7 +509,7 @@ export default function VendorsPage() {
                   className="flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-medium text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {quotationSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Send quotation
+                  Send agreement
                 </button>
               </div>
             </div>
