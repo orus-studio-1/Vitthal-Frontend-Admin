@@ -113,7 +113,17 @@ export interface Vendor {
   email?: string;
   company_name: string;
   gst_number?: string | null;
+  gst_certificate_link?: string | null;
+  business_type?: string | null;
+  company_website?: string | null;
   phone?: string | null;
+  alternative_number?: string | null;
+  designation?: string | null;
+  business_description?: string | null;
+  credit_cycle?: string | null;
+  minimum_commision_percentage?: number | null;
+  maximum_commision_percentage?: number | null;
+  rating?: number;
   address?: string | null;
   city?: string | null;
   state?: string | null;
@@ -127,6 +137,7 @@ export interface Vendor {
   created_at: string;
   updated_at: string;
   order_count?: number;
+  categories?: { id: string; code: string; label: string }[];
 }
 
 export type VendorQuotationStatus =
@@ -184,13 +195,27 @@ export interface CreateVendorQuotationPayload {
   quotationKind?: 'vendor_agreement' | 'order_request';
   productId?: string;
   title: string;
-  quantity: number;
-  unit: string;
+  quantity?: number;
+  unit?: string;
   targetPrice?: number | null;
   requestedMoq?: number | null;
   requestNotes?: string;
   validityDate?: string | null;
   adminSignatureData?: string;
+  vendorUpdates?: {
+    companyName?: string;
+    businessType?: string;
+    gstNumber?: string;
+    gstCertificateLink?: string;
+    companyWebsite?: string;
+    alternativeNumber?: string;
+    designation?: string;
+    businessDescription?: string;
+    creditCycle?: string;
+    minimumCommissionPercentage?: number;
+    maximumCommissionPercentage?: number;
+    vendorCategories?: string[];
+  };
 }
 
 export interface OrderProductVendorOption {

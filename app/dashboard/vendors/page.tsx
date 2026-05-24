@@ -9,24 +9,60 @@ import { extractApiError, quotationAPI, vendorAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { CreateVendorQuotationPayload, Vendor, VendorInsightsData, VendorQuotation } from '../../../lib/types';
 
+const CATEGORY_OPTIONS = [
+  { code: "plastic", label: "Plastic" },
+  { code: "metal", label: "Metal" },
+  { code: "chemicals", label: "Chemicals" },
+  { code: "construction", label: "Construction" },
+  { code: "machinery", label: "Machinery" },
+  { code: "packaging", label: "Packaging" },
+  { code: "textiles", label: "Textiles" },
+  { code: "automotive", label: "Automotive" },
+  { code: "agriculture", label: "Agriculture" },
+  { code: "electrical", label: "Electrical" },
+];
+
+const BUSINESS_TYPES = [
+  "Manufacturing",
+  "Trading",
+  "Service Provider",
+  "Distributor",
+  "Dealer",
+  "Exporter",
+  "Importer",
+  "Other",
+];
+
 type QuotationFormState = {
   title: string;
-  quantity: string;
-  unit: string;
-  targetPrice: string;
-  requestedMoq: string;
-  requestNotes: string;
-  validityDate: string;
+  companyName: string;
+  businessType: string;
+  gstNumber: string;
+  gstCertificateLink: string;
+  companyWebsite: string;
+  alternativeNumber: string;
+  designation: string;
+  businessDescription: string;
+  creditCycle: string;
+  minCommission: string;
+  maxCommission: string;
+  categories: string[];
 };
 
 const defaultQuotationForm: QuotationFormState = {
   title: '',
-  quantity: '',
-  unit: 'kg',
-  targetPrice: '',
-  requestedMoq: '',
-  requestNotes: '',
-  validityDate: '',
+  companyName: '',
+  businessType: '',
+  gstNumber: '',
+  gstCertificateLink: '',
+  companyWebsite: '',
+  alternativeNumber: '',
+  designation: '',
+  businessDescription: '',
+  creditCycle: '',
+  minCommission: '',
+  maxCommission: '',
+  categories: [],
 };
 
 export default function VendorsPage() {
@@ -126,12 +162,18 @@ export default function VendorsPage() {
     setQuotationFeedback(null);
     setQuotationForm({
       title: `${vendor.company_name} vendor agreement`,
-      quantity: '',
-      unit: 'kg',
-      targetPrice: '',
-      requestedMoq: '',
-      requestNotes: '',
-      validityDate: '',
+      companyName: vendor.company_name || '',
+      businessType: vendor.business_type || '',
+      gstNumber: vendor.gst_number || '',
+      gstCertificateLink: vendor.gst_certificate_link || '',
+      companyWebsite: vendor.company_website || '',
+      alternativeNumber: vendor.alternative_number || '',
+      designation: vendor.designation || '',
+      businessDescription: vendor.business_description || '',
+      creditCycle: vendor.credit_cycle || '',
+      minCommission: vendor.minimum_commision_percentage !== null && vendor.minimum_commision_percentage !== undefined ? String(vendor.minimum_commision_percentage) : '',
+      maxCommission: vendor.maximum_commision_percentage !== null && vendor.maximum_commision_percentage !== undefined ? String(vendor.maximum_commision_percentage) : '',
+      categories: vendor.categories?.map(c => c.code) || [],
     });
   };
 
@@ -152,19 +194,21 @@ export default function VendorsPage() {
         vendorId: quotationVendor.id,
         quotationKind: 'vendor_agreement',
         title: quotationForm.title.trim(),
-        quantity: Number(quotationForm.quantity),
-        unit: quotationForm.unit.trim(),
-        requestNotes: quotationForm.requestNotes.trim() || undefined,
-        validityDate: quotationForm.validityDate ? new Date(quotationForm.validityDate).toISOString() : null,
+        vendorUpdates: {
+          companyName: quotationForm.companyName.trim(),
+          businessType: quotationForm.businessType.trim(),
+          gstNumber: quotationForm.gstNumber.trim(),
+          gstCertificateLink: quotationForm.gstCertificateLink.trim(),
+          companyWebsite: quotationForm.companyWebsite.trim(),
+          alternativeNumber: quotationForm.alternativeNumber.trim(),
+          designation: quotationForm.designation.trim(),
+          businessDescription: quotationForm.businessDescription.trim(),
+          creditCycle: quotationForm.creditCycle.trim(),
+          minimumCommissionPercentage: quotationForm.minCommission ? Number(quotationForm.minCommission) : undefined,
+          maximumCommissionPercentage: quotationForm.maxCommission ? Number(quotationForm.maxCommission) : undefined,
+          vendorCategories: quotationForm.categories,
+        }
       };
-
-      if (quotationForm.targetPrice.trim()) {
-        payload.targetPrice = Number(quotationForm.targetPrice);
-      }
-
-      if (quotationForm.requestedMoq.trim()) {
-        payload.requestedMoq = Number(quotationForm.requestedMoq);
-      }
 
       const response = await quotationAPI.create(payload);
       setQuotationFeedback({
@@ -174,7 +218,6 @@ export default function VendorsPage() {
       });
       setQuotationVendor(null);
       setQuotationForm(defaultQuotationForm);
-      router.push('/dashboard/quotations');
     } catch (quotationError) {
       setQuotationFeedback({
         type: 'error',
@@ -413,84 +456,136 @@ export default function VendorsPage() {
               </button>
             </div>
 
-            <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+            <div className="grid gap-4 px-6 py-5 sm:grid-cols-2 max-h-[65vh] overflow-y-auto">
               <label className="space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium text-slate-700">Agreement title</span>
                 <input
                   value={quotationForm.title}
                   onChange={(event) => setQuotationForm((current) => ({ ...current, title: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-0 transition focus:border-blue-400"
-                  placeholder="Enter agreement title"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
                 />
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Quantity</span>
+                <span className="text-sm font-medium text-slate-700">Company Name</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={quotationForm.quantity}
-                  onChange={(event) => setQuotationForm((current) => ({ ...current, quantity: event.target.value }))}
+                  value={quotationForm.companyName}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, companyName: event.target.value }))}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
-                  placeholder="1000"
                 />
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Unit</span>
-                <input
-                  value={quotationForm.unit}
-                  onChange={(event) => setQuotationForm((current) => ({ ...current, unit: event.target.value }))}
+                <span className="text-sm font-medium text-slate-700">Business Type</span>
+                <select
+                  value={quotationForm.businessType}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, businessType: event.target.value }))}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
-                  placeholder="kg"
+                >
+                  <option value="">Select type</option>
+                  {BUSINESS_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">GST Number</span>
+                <input
+                  value={quotationForm.gstNumber}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, gstNumber: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
                 />
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Target price</span>
+                <span className="text-sm font-medium text-slate-700">Company Website</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={quotationForm.targetPrice}
-                  onChange={(event) => setQuotationForm((current) => ({ ...current, targetPrice: event.target.value }))}
+                  value={quotationForm.companyWebsite}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, companyWebsite: event.target.value }))}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
-                  placeholder="720"
                 />
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Requested MOQ</span>
+                <span className="text-sm font-medium text-slate-700">Alternative Phone</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={quotationForm.requestedMoq}
-                  onChange={(event) => setQuotationForm((current) => ({ ...current, requestedMoq: event.target.value }))}
+                  value={quotationForm.alternativeNumber}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, alternativeNumber: event.target.value }))}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
-                  placeholder="500"
                 />
               </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Designation</span>
+                <input
+                  value={quotationForm.designation}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, designation: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Credit Cycle</span>
+                <input
+                  value={quotationForm.creditCycle}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, creditCycle: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <div className="flex gap-4">
+                <label className="space-y-2 w-full">
+                  <span className="text-sm font-medium text-slate-700">Min Commission %</span>
+                  <input
+                    type="number"
+                    value={quotationForm.minCommission}
+                    onChange={(event) => setQuotationForm((current) => ({ ...current, minCommission: event.target.value }))}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                  />
+                </label>
+                <label className="space-y-2 w-full">
+                  <span className="text-sm font-medium text-slate-700">Max Commission %</span>
+                  <input
+                    type="number"
+                    value={quotationForm.maxCommission}
+                    onChange={(event) => setQuotationForm((current) => ({ ...current, maxCommission: event.target.value }))}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                  />
+                </label>
+              </div>
 
               <label className="space-y-2 sm:col-span-2">
-                <span className="text-sm font-medium text-slate-700">Validity date</span>
-                <input
-                  type="date"
-                  value={quotationForm.validityDate}
-                  onChange={(event) => setQuotationForm((current) => ({ ...current, validityDate: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
-                />
-              </label>
-
-              <label className="space-y-2 sm:col-span-2">
-                <span className="text-sm font-medium text-slate-700">Request notes</span>
+                <span className="text-sm font-medium text-slate-700">Business Description</span>
                 <textarea
-                  value={quotationForm.requestNotes}
-                  onChange={(event) => setQuotationForm((current) => ({ ...current, requestNotes: event.target.value }))}
-                  className="min-h-32 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
-                  placeholder="Describe the requirement, delivery expectations, packaging notes, or any special commercial request."
+                  value={quotationForm.businessDescription}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, businessDescription: event.target.value }))}
+                  className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
                 />
+              </label>
+
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium text-slate-700">Categories</span>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORY_OPTIONS.map(cat => (
+                    <button
+                      key={cat.code}
+                      onClick={() => {
+                        setQuotationForm(curr => {
+                          const cats = curr.categories.includes(cat.code)
+                            ? curr.categories.filter(c => c !== cat.code)
+                            : [...curr.categories, cat.code];
+                          return { ...curr, categories: cats };
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded-2xl text-xs font-medium border transition ${
+                        quotationForm.categories.includes(cat.code)
+                          ? 'border-blue-600 bg-blue-50 text-blue-700'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
               </label>
             </div>
 
