@@ -175,10 +175,10 @@ export default function ClientQuotationsAdminPage() {
                         </div>
                       ) : (
                         <div className={`rounded-xl border p-5 ${isWaitingClientResponse
-                            ? "border-blue-200 bg-blue-50/50"
-                            : isConfirmed
-                              ? "border-emerald-200 bg-emerald-50/50"
-                              : "border-rose-200 bg-rose-50/50"
+                          ? "border-blue-200 bg-blue-50/50"
+                          : isConfirmed
+                            ? "border-emerald-200 bg-emerald-50/50"
+                            : "border-rose-200 bg-rose-50/50"
                           }`}>
                           <h4 className="text-sm font-bold text-slate-900 mb-2">Admin Status</h4>
 
