@@ -128,6 +128,39 @@ export default function ClientQuotationsAdminPage() {
                           <p className="mt-1 text-lg font-bold text-slate-900">{quote.requested_quantity} <span className="text-sm font-medium text-slate-600">units</span></p>
                         </div>
                       </div>
+
+                      {/* Attached B2B Documents */}
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 space-y-2 max-w-xl">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Attached B2B Documents</p>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-xs">
+                          {quote.base_document_url ? (
+                            <a
+                              href={quote.base_document_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              <FileText size={14} className="shrink-0" />
+                              View Base Quotation PDF
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 italic">No Base Request PDF</span>
+                          )}
+                          {quote.vendor_document_url ? (
+                            <a
+                              href={quote.vendor_document_url.includes('?') ? quote.vendor_document_url : `${quote.vendor_document_url}?t=${new Date(quote.updated_at).getTime()}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 font-semibold text-emerald-600 hover:text-emerald-800 hover:underline"
+                            >
+                              <ShieldCheck size={14} className="shrink-0" />
+                              View Latest Negotiated PDF
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 italic">No counter-offer PDF generated yet</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Action Column */}
@@ -140,7 +173,9 @@ export default function ClientQuotationsAdminPage() {
                           </h4>
 
                           {confirmingId === quote.id ? (
-                            <div className="space-y-3">
+                            <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+
+
                               <textarea
                                 value={message}
                                 onChange={(e) => setMessage(e.target.value)}
