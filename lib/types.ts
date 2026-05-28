@@ -49,6 +49,36 @@ export interface Product {
   creator_vendor_name?: string | null;
   vendor_count?: number;
   is_active?: boolean;
+  detailed_specifications?: Array<{
+    id: string;
+    spec_key: string;
+    spec_value: string;
+    approval_status: 'pending' | 'approved' | 'rejected';
+    approval_notes?: string | null;
+    created_at: string;
+    created_by_user_id: string;
+  }>;
+  detailed_images?: Array<{
+    id: string;
+    image_url: string;
+    is_primary: boolean;
+    display_order: number;
+    approval_status: 'pending' | 'approved' | 'rejected';
+    is_approved: boolean;
+    created_by_user_id?: string | null;
+  }>;
+  detailed_vendors?: Array<{
+    id: string;
+    price: number;
+    moq: number;
+    stock_quantity: number;
+    is_active: boolean;
+    status: 'active' | 'inactive' | 'out_of_stock' | 'discontinued' | 'waiting';
+    created_at: string;
+    company_name: string;
+    vendor_name: string;
+    vendor_email: string;
+  }>;
 }
 
 export interface ProductFormData {

@@ -91,8 +91,22 @@ export const productAPI = {
 
   getAll: () => api.get<ApiResponse<Product[]>>('/api/products'),
 
+  getById: (id: string) => api.get<ApiResponse<Product>>(`/api/products/${id}`),
+
   review: (id: string, decision: 'approved' | 'rejected', notes?: string) =>
     api.put<ApiResponse<Product>>(`/api/products/${id}/review`, { decision, notes }),
+
+  reviewImage: (imageId: string, decision: 'approved' | 'rejected') =>
+    api.put<ApiResponse<any>>(`/api/products/image/${imageId}/review`, { decision }),
+
+  reviewSpecification: (specId: string, decision: 'approved' | 'rejected', notes?: string) =>
+    api.put<ApiResponse<any>>(`/api/products/specification/${specId}/review`, { decision, notes }),
+
+  reviewVendorProduct: (vendorProductId: string, decision: 'approved' | 'rejected') =>
+    api.put<ApiResponse<any>>(`/api/products/pending-vendor/${vendorProductId}/review`, { decision }),
+
+  getPendingVendorProducts: () =>
+    api.get<ApiResponse<any[]>>('/api/products/pending-vendor/all'),
 
   update: (
     id: string,
