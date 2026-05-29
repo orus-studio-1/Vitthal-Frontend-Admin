@@ -302,6 +302,29 @@ export interface AnalyticsData {
     vendor?: { id: string; name: string };
   }>;
   statusDistribution: Partial<Record<OrderStatus, number>>;
+  topCustomers: Array<{
+    user_id: string;
+    name: string;
+    email: string;
+    order_count: number;
+    total_spent: number;
+  }>;
+  topCities: Array<{
+    city: string;
+    order_count: number;
+    total_revenue: number;
+  }>;
+  purchaseTimeOfDay: Array<{
+    hour_of_day: number;
+    order_count: number;
+    total_revenue: number;
+  }>;
+  categoryDistribution: Array<{
+    category: string | null;
+    order_count: number;
+    total_quantity: number;
+    total_revenue: number;
+  }>;
 }
 
 export interface UserManagementData {

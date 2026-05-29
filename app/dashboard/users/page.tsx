@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, Loader2, Shield, ToggleLeft, ToggleRight, Users } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import UserDetailsModal from '../../../components/user-details-modal';
 import { adminAPI, extractApiError } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
-import { UserDetailsData, UserManagementData } from '../../../lib/types';
+import { User, UserDetailsData, UserManagementData } from '../../../lib/types';
 
 export default function UsersPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -19,6 +19,17 @@ export default function UsersPage() {
   const [userDetails, setUserDetails] = useState<UserDetailsData | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
+
+  const clients = useMemo(() => {
+    return data?.users.filter(user => user.role === 'client') || [];
+  }, [data?.users]);
+
+  const clientStats = useMemo(() => {
+    const total = clients.length;
+    const active = clients.filter((c: User) => c.is_active).length;
+    const inactive = total - active;
+    return { total, active, inactive };
+  }, [clients]);
 
   async function fetchUsers() {
     try {
@@ -84,24 +95,24 @@ export default function UsersPage() {
       <div className="space-y-6">
         <section className="grid gap-4 md:grid-cols-3">
           <article className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Total users</p>
-            <p className="mt-2 text-3xl font-semibold text-slate-900">{data?.stats.total || 0}</p>
+            <p className="text-sm text-slate-500">Total Clients</p>
+            <p className="mt-2 text-3xl font-semibold text-slate-900">{clientStats.total}</p>
           </article>
           <article className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Active users</p>
-            <p className="mt-2 text-3xl font-semibold text-emerald-700">{data?.stats.active || 0}</p>
+            <p className="text-sm text-slate-500">Active Clients</p>
+            <p className="mt-2 text-3xl font-semibold text-emerald-700">{clientStats.active}</p>
           </article>
           <article className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Inactive users</p>
-            <p className="mt-2 text-3xl font-semibold text-amber-700">{data?.stats.inactive || 0}</p>
+            <p className="text-sm text-slate-500">Inactive Clients</p>
+            <p className="mt-2 text-3xl font-semibold text-amber-700">{clientStats.inactive}</p>
           </article>
         </section>
 
         <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">User management</h1>
-              <p className="text-sm text-slate-500">Use View to inspect the complete account details for a user.</p>
+              <h1 className="text-xl font-semibold text-slate-900">Client Management</h1>
+              <p className="text-sm text-slate-500">Use View to inspect the complete account details, address, and order history for a client.</p>
             </div>
             <div className="rounded-2xl bg-blue-50 p-3 text-blue-700"><Users className="h-5 w-5" /></div>
           </div>
@@ -112,7 +123,7 @@ export default function UsersPage() {
             <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>
           ) : (
             <div className="space-y-4">
-              {data?.users.length ? data.users.map((user) => (
+              {clients.length ? clients.map((user: User) => (
                 <article key={user.id} className="flex flex-col gap-4 rounded-2xl border border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <div className="flex items-center gap-3">
@@ -122,7 +133,7 @@ export default function UsersPage() {
                         <p className="text-sm text-slate-500">{user.email}</p>
                       </div>
                     </div>
-                    <p className="mt-3 text-xs uppercase tracking-[0.25em] text-slate-400">{user.role}</p>
+                    <p className="mt-2 text-xs text-slate-400">Registered: {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button onClick={() => void openUserDetails(user.id)} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
@@ -135,7 +146,7 @@ export default function UsersPage() {
                     </button>
                   </div>
                 </article>
-              )) : <p className="rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">No users found.</p>}
+              )) : <p className="rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">No clients found.</p>}
             </div>
           )}
         </section>

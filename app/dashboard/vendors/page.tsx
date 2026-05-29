@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, CheckCircle2, Eye, FileText, Loader2, Send, ToggleLeft, ToggleRight, X, XCircle } from 'lucide-react';
+import { Building2, CheckCircle2, Eye, FileText, Loader2, Search, Send, ToggleLeft, ToggleRight, X, XCircle } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import VendorInsightsModal from '../../../components/vendor-insights-modal';
 import { extractApiError, quotationAPI, vendorAPI } from '../../../lib/api';
@@ -81,6 +81,9 @@ export default function VendorsPage() {
   const [quotationForm, setQuotationForm] = useState<QuotationFormState>(defaultQuotationForm);
   const [quotationSubmitting, setQuotationSubmitting] = useState(false);
   const [quotationFeedback, setQuotationFeedback] = useState<{ type: 'success' | 'error'; text: string; link?: string } | null>(null);
+  const [blockingVendor, setBlockingVendor] = useState<Vendor | null>(null);
+  const [unblockingVendor, setUnblockingVendor] = useState<Vendor | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   async function fetchVendors() {
     try {
@@ -139,6 +142,28 @@ export default function VendorsPage() {
       await fetchVendors();
     } catch (updateError) {
       setError(extractApiError(updateError, 'Failed to update vendor status'));
+    }
+  };
+
+  const handleBlockVendor = async () => {
+    if (!blockingVendor) return;
+    try {
+      await vendorAPI.updateStatus(blockingVendor.id, { is_blocked: true, is_active: false });
+      setBlockingVendor(null);
+      await fetchVendors();
+    } catch (updateError) {
+      setError(extractApiError(updateError, 'Failed to block vendor'));
+    }
+  };
+
+  const handleUnblockVendor = async () => {
+    if (!unblockingVendor) return;
+    try {
+      await vendorAPI.updateStatus(unblockingVendor.id, { is_blocked: false, is_active: true });
+      setUnblockingVendor(null);
+      await fetchVendors();
+    } catch (updateError) {
+      setError(extractApiError(updateError, 'Failed to unblock vendor'));
     }
   };
 
@@ -243,7 +268,28 @@ export default function VendorsPage() {
       }, {}),
     [agreementQuotations]
   );
-  const reviewPendingVendors = vendors.filter((vendor) => vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent');
+
+  const filteredVendors = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return vendors;
+    return vendors.filter((vendor) => {
+      return (
+        vendor.name?.toLowerCase().includes(query) ||
+        vendor.company_name?.toLowerCase().includes(query) ||
+        vendor.email?.toLowerCase().includes(query) ||
+        vendor.application_number?.toLowerCase().includes(query)
+      );
+    });
+  }, [vendors, searchQuery]);
+
+  const reviewPendingVendors = useMemo(() => {
+    return filteredVendors.filter((vendor) => vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent');
+  }, [filteredVendors]);
+
+  const approvedVendors = useMemo(() => {
+    return filteredVendors;
+  }, [filteredVendors]);
+
   const getAgreementForVendor = (vendorId: string) => latestAgreementByVendor[vendorId] || null;
   const canSendAgreement = (vendor: Vendor) => vendor.approval_status === 'pending' && !getAgreementForVendor(vendor.id);
   const canApproveVendor = (vendor: Vendor) => {
@@ -251,8 +297,7 @@ export default function VendorsPage() {
     return vendor.approval_status === 'agreement_sent' && Boolean(agreement && ['vendor_approved', 'vendor_rejected'].includes(agreement.status));
   };
   const canRejectVendor = (vendor: Vendor) => {
-    const agreement = getAgreementForVendor(vendor.id);
-    return vendor.approval_status === 'agreement_sent' && Boolean(agreement && ['vendor_approved', 'vendor_rejected'].includes(agreement.status));
+    return vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent';
   };
 
   if (authLoading || !isAuthenticated) {
@@ -289,50 +334,51 @@ export default function VendorsPage() {
                 const agreement = getAgreementForVendor(vendor.id);
 
                 return (
-                <article key={vendor.id} className="rounded-2xl border border-slate-200 p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="font-semibold text-slate-900">{vendor.company_name}</h3>
-                        {vendor.application_number && (
-                          <span className="rounded-2xl bg-blue-50 border border-blue-200/60 px-2.5 py-0.5 font-mono text-xs font-semibold text-blue-700">
-                            {vendor.application_number}
-                          </span>
-                        )}
+                  <article key={vendor.id} className="rounded-2xl border border-slate-200 p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h3 className="font-semibold text-slate-900">{vendor.company_name}</h3>
+                          {vendor.application_number && (
+                            <span className="rounded-2xl bg-blue-50 border border-blue-200/60 px-2.5 py-0.5 font-mono text-xs font-semibold text-blue-700">
+                              {vendor.application_number}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">{vendor.name} • {vendor.email}</p>
+                        <p className="mt-2 text-sm text-slate-600">{vendor.phone || 'No phone'} {vendor.gst_number ? `• ${vendor.gst_number}` : ''}</p>
+                        {agreement ? (
+                          <p className="mt-2 text-xs text-slate-500">Agreement status: {agreement.status.replaceAll('_', ' ')}</p>
+                        ) : null}
                       </div>
-                      <p className="mt-1 text-sm text-slate-500">{vendor.name} • {vendor.email}</p>
-                      <p className="mt-2 text-sm text-slate-600">{vendor.phone || 'No phone'} {vendor.gst_number ? `• ${vendor.gst_number}` : ''}</p>
-                      {agreement ? (
-                        <p className="mt-2 text-xs text-slate-500">Agreement status: {agreement.status.replaceAll('_', ' ')}</p>
-                      ) : null}
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => void openVendorView(vendor)} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                          <Eye className="h-4 w-4" />
+                          View
+                        </button>
+                        {canSendAgreement(vendor) ? (
+                          <button onClick={() => openQuotationModal(vendor)} className="flex items-center gap-2 rounded-2xl border border-blue-200 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-50">
+                            <Send className="h-4 w-4" />
+                            Send agreement
+                          </button>
+                        ) : null}
+                        {canApproveVendor(vendor) ? (
+                          <button onClick={() => reviewVendor(vendor.id, 'approved')} className="flex items-center gap-2 rounded-2xl border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+                            <CheckCircle2 className="h-4 w-4" />
+                            Approve
+                          </button>
+                        ) : null}
+                        {canRejectVendor(vendor) ? (
+                          <button onClick={() => reviewVendor(vendor.id, 'rejected')} className="flex items-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50">
+                            <XCircle className="h-4 w-4" />
+                            Reject
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => void openVendorView(vendor)} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                        <Eye className="h-4 w-4" />
-                        View
-                      </button>
-                      {canSendAgreement(vendor) ? (
-                        <button onClick={() => openQuotationModal(vendor)} className="flex items-center gap-2 rounded-2xl border border-blue-200 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-50">
-                          <Send className="h-4 w-4" />
-                          Send agreement
-                        </button>
-                      ) : null}
-                      {canApproveVendor(vendor) ? (
-                        <button onClick={() => reviewVendor(vendor.id, 'approved')} className="flex items-center gap-2 rounded-2xl border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
-                          <CheckCircle2 className="h-4 w-4" />
-                          Approve
-                        </button>
-                      ) : null}
-                      {canRejectVendor(vendor) ? (
-                        <button onClick={() => reviewVendor(vendor.id, 'rejected')} className="flex items-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50">
-                          <XCircle className="h-4 w-4" />
-                          Reject
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                </article>
-              )})}
+                  </article>
+                )
+              })}
             </div>
           ) : (
             <p className="rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">No vendors are waiting for approval.</p>
@@ -353,7 +399,20 @@ export default function VendorsPage() {
                 <FileText className="h-4 w-4" />
                 Review quotations
               </button>
-              <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{vendors.length} vendors</div>
+              <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{approvedVendors.length} vendors</div>
+            </div>
+          </div>
+
+          <div className="mb-5">
+            <label className="form-label">Search vendors</label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                className="form-input pl-11"
+                placeholder="Search by vendor name, company name, email, or application ID"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
             </div>
           </div>
 
@@ -361,7 +420,7 @@ export default function VendorsPage() {
             <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>
           ) : (
             <div className="space-y-4">
-              {vendors.length ? vendors.map((vendor) => (
+              {approvedVendors.length ? approvedVendors.map((vendor) => (
                 <article key={vendor.id} className="rounded-2xl border border-slate-200 p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
@@ -413,9 +472,15 @@ export default function VendorsPage() {
                           Reject
                         </button>
                       ) : null}
-                      <button onClick={() => toggleVendorStatus(vendor)} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-                        {vendor.is_active ? <ToggleRight className="h-5 w-5 text-emerald-600" /> : <ToggleLeft className="h-5 w-5 text-slate-400" />}
-                        {vendor.is_active ? 'Deactivate' : 'Activate'}
+                      <button onClick={() => {
+                        if (vendor.is_blocked) {
+                          setUnblockingVendor(vendor);
+                        } else {
+                          setBlockingVendor(vendor);
+                        }
+                      }} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                        {vendor.is_blocked ? <ToggleRight className="h-5 w-5 text-red-600" /> : <ToggleLeft className="h-5 w-5 text-slate-400" />}
+                        {vendor.is_blocked ? 'Unblock' : 'Block'}
                       </button>
                     </div>
                   </div>
@@ -576,11 +641,10 @@ export default function VendorsPage() {
                           return { ...curr, categories: cats };
                         });
                       }}
-                      className={`px-3 py-1.5 rounded-2xl text-xs font-medium border transition ${
-                        quotationForm.categories.includes(cat.code)
+                      className={`px-3 py-1.5 rounded-2xl text-xs font-medium border transition ${quotationForm.categories.includes(cat.code)
                           ? 'border-blue-600 bg-blue-50 text-blue-700'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
+                        }`}
                     >
                       {cat.label}
                     </button>
@@ -607,6 +671,60 @@ export default function VendorsPage() {
                   Send agreement
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Block Vendor Confirmation Modal */}
+      {blockingVendor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-slate-950">Block Vendor</h3>
+            <p className="text-sm text-slate-500">
+              Are you sure you want to block <span className="font-semibold text-slate-800">{blockingVendor.company_name}</span>? 
+              They will not be able to access their vendor dashboard or perform any actions until unblocked.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setBlockingVendor(null)}
+                className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleBlockVendor()}
+                className="rounded-2xl bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition"
+              >
+                Block Vendor
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Unblock Vendor Confirmation Modal */}
+      {unblockingVendor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-slate-950">Unblock Vendor</h3>
+            <p className="text-sm text-slate-500">
+              Are you sure you want to unblock <span className="font-semibold text-slate-800">{unblockingVendor.company_name}</span>? 
+              This will restore their access to the vendor dashboard.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setUnblockingVendor(null)}
+                className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleUnblockVendor()}
+                className="rounded-2xl bg-blue-700 hover:bg-blue-800 px-4 py-2 text-sm font-semibold text-white transition"
+              >
+                Unblock Vendor
+              </button>
             </div>
           </div>
         </div>

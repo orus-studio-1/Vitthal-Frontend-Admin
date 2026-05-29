@@ -46,6 +46,7 @@ export default function OrdersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [vendorOptionsLoading, setVendorOptionsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'buy' | 'orders'>('orders');
 
   async function loadData() {
     try {
@@ -228,12 +229,44 @@ export default function OrdersPage() {
 
   return (
     <DashboardLayout>
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="mb-6 flex items-center justify-between border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Order Management</h1>
+          <p className="text-sm text-slate-500">Place direct orders on behalf of clients or manage incoming customer orders.</p>
+        </div>
+      </div>
+
+      <div className="mb-6 flex items-center justify-between gap-4 rounded-3xl bg-slate-100 p-1.5 max-w-md">
+        <button
+          onClick={() => setActiveTab('orders')}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold transition-all ${
+            activeTab === 'orders'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <ShoppingCart className="h-4 w-4" />
+          Orders Directory
+        </button>
+        <button
+          onClick={() => setActiveTab('buy')}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold transition-all ${
+            activeTab === 'buy'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <ShoppingBag className="h-4 w-4" />
+          Buy Products (Catalog)
+        </button>
+      </div>
+
+      {activeTab === 'buy' ? (
         <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-center gap-3">
             <div className="rounded-2xl bg-blue-50 p-3 text-blue-700"><ShoppingBag className="h-5 w-5" /></div>
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">Buy products</h1>
+              <h2 className="text-xl font-semibold text-slate-900">Buy products</h2>
               <p className="text-sm text-slate-500">Search approved catalogue items and start an admin order directly from the product cards.</p>
             </div>
           </div>
@@ -256,7 +289,7 @@ export default function OrdersPage() {
           {loading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {filteredProducts.length ? filteredProducts.map((product) => (
                 <article key={product.id} className="rounded-[1.45rem] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] p-5 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
@@ -301,7 +334,7 @@ export default function OrdersPage() {
             </div>
           )}
         </section>
-
+      ) : (
         <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-center justify-between">
             <div>
@@ -316,21 +349,29 @@ export default function OrdersPage() {
           ) : (
             <div className="space-y-4">
               {orders.length ? orders.map((order) => (
-                <article key={order.id} className="rounded-2xl border border-slate-200 p-5">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div>
+                <article key={order.id} className="rounded-2xl border border-slate-200 p-5 hover:border-slate-300 transition-colors">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex-1">
                       <div className="flex items-center gap-3">
                         <div className="rounded-2xl bg-blue-50 p-3 text-blue-700"><ShoppingCart className="h-5 w-5" /></div>
                         <div>
                           <h3 className="font-semibold text-slate-900">{order.customer_name}</h3>
-                          <p className="text-sm text-slate-500">{order.product_name || 'Unknown product'} • {order.vendor_name || 'Unknown vendor'}</p>
+                          <p className="text-sm text-slate-500">
+                            <span className="font-medium text-slate-700">{order.product_name || 'Unknown product'}</span> • Supplied by <span className="font-medium text-slate-700">{order.vendor_name || 'Unknown vendor'}</span>
+                          </p>
                         </div>
                       </div>
-                      <p className="mt-3 text-sm text-slate-600">Amount: Rs. {Number(order.total_amount).toFixed(2)} • Quantity: {order.quantity}</p>
-                      <p className="mt-2 text-sm text-slate-500">{order.delivery_address || 'No delivery address yet.'}</p>
-                      <div className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{order.source} order</div>
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600">
+                        <p><span className="text-slate-400">Amount:</span> <span className="font-semibold text-slate-900">Rs. {Number(order.total_amount).toFixed(2)}</span></p>
+                        <p>•</p>
+                        <p><span className="text-slate-400">Qty:</span> <span className="font-semibold text-slate-900">{order.quantity}</span></p>
+                        <p>•</p>
+                        <p><span className="text-slate-400">Ordered:</span> <span className="font-medium text-slate-900">{new Date(order.created_at).toLocaleDateString()}</span></p>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-500"><span className="text-slate-400">Shipping Address:</span> {order.delivery_address || 'No delivery address yet.'}</p>
+                      <div className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-700">{order.source} order</div>
                     </div>
-                    <div className="min-w-52">
+                    <div className="min-w-[240px] border-t border-slate-100 pt-4 lg:border-t-0 lg:pt-0">
                       <label className="form-label">Status</label>
                       <select className="form-input" value={order.status} onChange={(event) => handleStatusUpdate(order.id, event.target.value as OrderStatus)}>
                         {orderStatuses.map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
@@ -342,7 +383,7 @@ export default function OrdersPage() {
             </div>
           )}
         </section>
-      </div>
+      )}
 
       {orderingProduct ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
