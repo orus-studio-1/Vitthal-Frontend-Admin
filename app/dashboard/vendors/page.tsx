@@ -84,6 +84,8 @@ export default function VendorsPage() {
   const [blockingVendor, setBlockingVendor] = useState<Vendor | null>(null);
   const [unblockingVendor, setUnblockingVendor] = useState<Vendor | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [reconsiderationNotes, setReconsiderationNotes] = useState<Record<string, string>>({});
+  const [activeReconsiderationVendorId, setActiveReconsiderationVendorId] = useState<string | null>(null);
 
   async function fetchVendors() {
     try {
@@ -167,12 +169,12 @@ export default function VendorsPage() {
     }
   };
 
-  const reviewVendor = async (vendorId: string, decision: 'approved' | 'rejected') => {
+  const reviewVendor = async (vendorId: string, decision: 'approved' | 'rejected' | 'reconsideration', notes?: string) => {
     try {
-      await vendorAPI.review(vendorId, decision);
+      await vendorAPI.review(vendorId, decision, notes);
       await fetchVendors();
     } catch (reviewError) {
-      setError(extractApiError(reviewError, `Failed to ${decision} vendor`));
+      setError(extractApiError(reviewError, `Failed to submit review for vendor`));
     }
   };
 
@@ -374,8 +376,67 @@ export default function VendorsPage() {
                             Reject
                           </button>
                         ) : null}
+                        {vendor.approval_status !== 'approved' && (
+                          <button
+                            onClick={() => {
+                              setActiveReconsiderationVendorId(
+                                activeReconsiderationVendorId === vendor.id ? null : vendor.id
+                              );
+                            }}
+                            className={`flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition ${
+                              activeReconsiderationVendorId === vendor.id
+                                ? 'border-amber-600 bg-amber-50 text-amber-700 font-semibold'
+                                : 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                            }`}
+                          >
+                            <FileText className="h-4 w-4" />
+                            Request changes
+                          </button>
+                        )}
                       </div>
                     </div>
+                    {activeReconsiderationVendorId === vendor.id && (
+                      <div className="mt-4 border-t border-slate-100 pt-4 space-y-3">
+                        <label className="block text-sm font-medium text-slate-700">
+                          Edits/Reconsideration Note for Vendor
+                        </label>
+                        <textarea
+                          placeholder="Explain what the vendor needs to correct (e.g. Please update your credit cycle details or upload a clearer GST certificate image)."
+                          value={reconsiderationNotes[vendor.id] || ''}
+                          onChange={(e) =>
+                            setReconsiderationNotes({
+                              ...reconsiderationNotes,
+                              [vendor.id]: e.target.value,
+                            })
+                          }
+                          className="w-full min-h-20 rounded-2xl border border-slate-200 p-3 text-sm outline-none focus:border-amber-400 text-slate-900"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setActiveReconsiderationVendorId(null);
+                            }}
+                            className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const note = reconsiderationNotes[vendor.id]?.trim() || '';
+                              if (!note) {
+                                alert('Please provide a note for the vendor explaining the requested changes.');
+                                return;
+                              }
+                              await reviewVendor(vendor.id, 'reconsideration', note);
+                              setActiveReconsiderationVendorId(null);
+                            }}
+                            className="rounded-2xl bg-amber-600 hover:bg-amber-700 px-4 py-2 text-xs font-semibold text-white transition"
+                          >
+                            Send for review to vendor
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </article>
                 )
               })}
@@ -441,7 +502,13 @@ export default function VendorsPage() {
                       <p className="mt-3 text-sm text-slate-600">{vendor.phone || 'No phone'} {vendor.gst_number ? `• ${vendor.gst_number}` : ''}</p>
                       <p className="mt-2 text-sm text-slate-500">Orders linked: {vendor.order_count || 0}</p>
                       <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">{vendor.approval_status}</span>
+                        <span className={`rounded-full px-3 py-1 font-medium ${
+                          vendor.approval_status === 'reconsideration'
+                            ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {vendor.approval_status === 'reconsideration' ? 'needs changes' : vendor.approval_status}
+                        </span>
                         {!vendor.is_active ? <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-700">inactive</span> : null}
                         {vendor.is_blocked ? <span className="rounded-full bg-red-100 px-3 py-1 font-medium text-red-700">blocked</span> : null}
                       </div>

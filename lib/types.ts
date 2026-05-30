@@ -5,7 +5,7 @@ export interface ApiResponse<T = unknown> {
 
 export type UserRole = 'client' | 'vendor' | 'admin' | 'super_admin';
 export type ProductCategory = 'Plastic' | 'Metal';
-export type ApprovalStatus = 'pending' | 'agreement_sent' | 'approved' | 'rejected';
+export type ApprovalStatus = 'pending' | 'agreement_sent' | 'approved' | 'rejected' | 'reconsideration';
 
 export interface User {
   id: string;
@@ -161,6 +161,7 @@ export interface Vendor {
   pincode?: string | null;
   approval_status: ApprovalStatus;
   approval_notes?: string | null;
+  reconsideration_notes?: string | null;
   application_number?: string | null;
   is_active: boolean;
   is_blocked: boolean;

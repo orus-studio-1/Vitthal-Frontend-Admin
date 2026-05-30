@@ -158,7 +158,7 @@ export const vendorAPI = {
   updateStatus: (id: string, data: Partial<Pick<Vendor, 'is_active' | 'is_blocked'>>) =>
     api.put<ApiResponse<Vendor>>(`/api/vendors/${id}/status`, data),
 
-  review: (id: string, decision: 'approved' | 'rejected', notes?: string) =>
+  review: (id: string, decision: 'approved' | 'rejected' | 'reconsideration', notes?: string) =>
     api.put<ApiResponse<Vendor>>(`/api/vendors/${id}/review`, { decision, notes }),
 };
 
