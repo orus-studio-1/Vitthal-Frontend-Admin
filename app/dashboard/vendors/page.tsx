@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Building2, CheckCircle2, Eye, FileText, Loader2, Search, Send, ToggleLeft, ToggleRight, X, XCircle } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import VendorInsightsModal from '../../../components/vendor-insights-modal';
-import { extractApiError, quotationAPI, vendorAPI } from '../../../lib/api';
+import { extractApiError, quotationAPI, vendorAPI, productAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { CreateVendorQuotationPayload, Vendor, VendorInsightsData, VendorQuotation } from '../../../lib/types';
 
@@ -69,6 +69,22 @@ export default function VendorsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [categoriesOptions, setCategoriesOptions] = useState<any[]>(CATEGORY_OPTIONS);
+
+  useEffect(() => {
+    async function fetchCats() {
+      try {
+        const response = await productAPI.getCategories();
+        if (response.data?.data) {
+          setCategoriesOptions(response.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load categories:", err);
+      }
+    }
+    fetchCats();
+  }, []);
+
   const [quotations, setQuotations] = useState<VendorQuotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -697,7 +713,7 @@ export default function VendorsPage() {
               <label className="space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium text-slate-700">Categories</span>
                 <div className="flex flex-wrap gap-2">
-                  {CATEGORY_OPTIONS.map(cat => (
+                  {categoriesOptions.map(cat => (
                     <button
                       key={cat.code}
                       onClick={() => {

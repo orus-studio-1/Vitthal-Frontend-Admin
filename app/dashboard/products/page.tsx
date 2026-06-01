@@ -52,8 +52,23 @@ export default function ProductsPage() {
   
   const [products, setProducts] = useState<Product[]>([]);
   const [pendingListings, setPendingListings] = useState<PendingVendorListing[]>([]);
+  const [categoriesOptions, setCategoriesOptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function loadCats() {
+      try {
+        const response = await productAPI.getCategories();
+        if (response.data?.data) {
+          setCategoriesOptions(response.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load categories:", err);
+      }
+    }
+    loadCats();
+  }, []);
 
   // Selected product / details drawer states
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -465,7 +480,7 @@ export default function ProductsPage() {
                               <Eye className="h-4 w-4 text-slate-400" />
                             </h3>
                             <p className="text-xs text-slate-500 mt-0.5">
-                              {product.category} • {product.product_type} • {product.vendor_count || 0} sellers
+                              {categoriesOptions.find(c => c.id === product.category)?.label || product.category || 'Unclassified'} • {product.product_type} • {product.vendor_count || 0} sellers
                             </p>
                           </div>
                           <div className="flex gap-2">
@@ -512,7 +527,7 @@ export default function ProductsPage() {
                               <Eye className="h-4 w-4 text-slate-400" />
                             </h3>
                             <p className="text-xs text-slate-500 mt-0.5">
-                              Submitted by: <span className="font-semibold text-slate-700">{product.creator_vendor_name || product.creator_name || 'Vendor'}</span> • {product.category} • {product.product_type}
+                              Submitted by: <span className="font-semibold text-slate-700">{product.creator_vendor_name || product.creator_name || 'Vendor'}</span> • {categoriesOptions.find(c => c.id === product.category)?.label || product.category || 'Unclassified'} • {product.product_type}
                             </p>
                             <span className={`inline-block rounded-full px-2.5 py-0.5 mt-2 text-[10px] font-bold uppercase border ${
                               product.approval_status === 'approved'
@@ -636,12 +651,16 @@ export default function ProductsPage() {
                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
                           Category
                         </label>
-                        <input
-                          type="text"
+                        <select
                           value={editCategory}
                           onChange={(e) => setEditCategory(e.target.value)}
                           className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                        />
+                        >
+                          <option value="">Select category...</option>
+                          {categoriesOptions.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.label}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
@@ -679,10 +698,10 @@ export default function ProductsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
-                          Category Code / ID
+                          Category
                         </span>
                         <p className="font-semibold text-slate-700 capitalize">
-                          {selectedProduct.category || 'Unclassified'}
+                          {categoriesOptions.find(c => c.id === selectedProduct.category)?.label || selectedProduct.category || 'Unclassified'}
                         </p>
                       </div>
                       <div>

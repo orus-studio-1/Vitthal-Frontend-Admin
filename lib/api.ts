@@ -91,6 +91,8 @@ export const productAPI = {
 
   getAll: () => api.get<ApiResponse<Product[]>>('/api/products'),
 
+  getCategories: () => api.get<ApiResponse<any[]>>('/api/products/getCategories'),
+
   getById: (id: string) => api.get<ApiResponse<Product>>(`/api/products/${id}`),
 
   review: (id: string, decision: 'approved' | 'rejected', notes?: string) =>
