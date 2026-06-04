@@ -93,6 +93,33 @@ export const productAPI = {
 
   getCategories: () => api.get<ApiResponse<any[]>>('/api/products/getCategories'),
 
+  createCategory: (data: {
+    code: string;
+    label: string;
+    description?: string;
+    image: string;
+    min_commision_percentage: number;
+    max_commision_percentage: number;
+    sort_order: number;
+    is_active: boolean;
+  }) => api.post<ApiResponse<any>>('/api/products/categories/add', data),
+
+  updateCategory: (
+    id: string,
+    data: Partial<{
+      code: string;
+      label: string;
+      description: string | null;
+      image: string;
+      min_commision_percentage: number;
+      max_commision_percentage: number;
+      sort_order: number;
+      is_active: boolean;
+    }>
+  ) => api.put<ApiResponse<any>>(`/api/products/categories/${id}`, data),
+
+  deleteCategory: (id: string) => api.delete<{ message: string }>(`/api/products/categories/${id}`),
+
   getById: (id: string) => api.get<ApiResponse<Product>>(`/api/products/${id}`),
 
   review: (id: string, decision: 'approved' | 'rejected', notes?: string) =>
@@ -186,6 +213,15 @@ export const adminAPI = {
 
   sendVendorChatMessage: (vendorId: string, body: string) =>
     api.post<ApiResponse<AdminVendorChatConversation['messages'][number]>>(`/api/admin/vendor-chats/${vendorId}`, { body }),
+
+  getPayments: () =>
+    api.get<ApiResponse<any[]>>('/api/admin/payments'),
+
+  getPayouts: () =>
+    api.get<ApiResponse<any[]>>('/api/orders/payouts'),
+
+  updatePayout: (orderId: string, payoutPercentage: number, notes?: string) =>
+    api.put<ApiResponse<any>>(`/api/orders/payouts/${orderId}`, { payoutPercentage, notes }),
 };
 
 export const quotationAPI = {

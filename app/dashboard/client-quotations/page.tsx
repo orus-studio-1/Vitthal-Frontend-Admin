@@ -123,6 +123,12 @@ export default function ClientQuotationsAdminPage() {
                           <p className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Agreed Terms</p>
                           <p className="mt-1 text-lg font-bold text-emerald-900">₹{quote.accepted_price} <span className="text-sm font-medium text-emerald-700">× {quote.accepted_quantity} units</span></p>
                         </div>
+                        {quote.token_percentage != null && (
+                          <div className="rounded-lg bg-amber-50 px-4 py-2 border border-amber-100">
+                            <p className="text-xs font-medium text-amber-600 uppercase tracking-wider">Token Money</p>
+                            <p className="mt-1 text-lg font-bold text-amber-900">{quote.token_percentage}% <span className="text-sm font-medium text-amber-700">(₹{Number(quote.token_amount).toLocaleString("en-IN")})</span></p>
+                          </div>
+                        )}
                         <div className="rounded-lg bg-slate-50 px-4 py-2 border border-slate-100">
                           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Initial Request</p>
                           <p className="mt-1 text-lg font-bold text-slate-900">{quote.requested_quantity} <span className="text-sm font-medium text-slate-600">units</span></p>

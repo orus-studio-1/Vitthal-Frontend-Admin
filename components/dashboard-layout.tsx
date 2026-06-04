@@ -16,17 +16,23 @@ import {
   ShoppingCart,
   Users,
   X,
+  CreditCard,
+  Tags,
+  DollarSign,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Products', href: '/dashboard/products', icon: Package },
+  { name: 'Categories', href: '/dashboard/categories', icon: Tags },
   { name: 'Vendors', href: '/dashboard/vendors', icon: Building2 },
   { name: 'Vendor Chat', href: '/dashboard/vendor-chat', icon: MessageSquare },
   { name: 'Quotations', href: '/dashboard/quotations', icon: FileText },
   { name: 'Client Quotations', href: '/dashboard/client-quotations', icon: FileText },
   { name: 'Agreements', href: '/dashboard/agreements', icon: FileText },
   { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCart },
+  { name: 'Payments', href: '/dashboard/payments', icon: CreditCard },
+  { name: 'Vendor Payouts', href: '/dashboard/payouts', icon: DollarSign },
   { name: 'Users', href: '/dashboard/users', icon: Users },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
 ];
