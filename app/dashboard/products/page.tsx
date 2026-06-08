@@ -20,7 +20,8 @@ import {
   Calendar,
   AlertCircle,
   BellRing,
-  ArrowUpRight
+  ArrowUpRight,
+  Plus
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, productAPI } from '../../../lib/api';
@@ -81,6 +82,7 @@ export default function ProductsPage() {
   const [editDescription, setEditDescription] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editProductType, setEditProductType] = useState('');
+  const [editAttributes, setEditAttributes] = useState<{ id: string; key: string; value: string; }[]>([]);
 
   async function fetchProducts() {
     try {
@@ -158,9 +160,29 @@ export default function ProductsPage() {
       setEditDescription(product.description || '');
       setEditCategory(product.category || '');
       setEditProductType(product.product_type || '');
+      setEditAttributes([]);
 
       const response = await productAPI.getById(product.id);
-      setSelectedProduct(response.data.data);
+      const fetchedProduct = response.data.data;
+      setSelectedProduct(fetchedProduct);
+
+      const initialAttrs: { id: string; key: string; value: string; }[] = [];
+      if (fetchedProduct.attributes) {
+        Object.entries(fetchedProduct.attributes).forEach(([k, v]) => {
+          initialAttrs.push({
+            id: `attr-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            key: k,
+            value: String(v),
+          });
+        });
+      } else {
+        // Fallbacks
+        if (fetchedProduct.material) initialAttrs.push({ id: 'material', key: 'Material', value: fetchedProduct.material });
+        if (fetchedProduct.grade) initialAttrs.push({ id: 'grade', key: 'Grade', value: fetchedProduct.grade });
+        if (fetchedProduct.application) initialAttrs.push({ id: 'application', key: 'Application', value: fetchedProduct.application });
+        if (fetchedProduct.standard) initialAttrs.push({ id: 'standard', key: 'Standard', value: fetchedProduct.standard });
+      }
+      setEditAttributes(initialAttrs);
     } catch (err) {
       setError(extractApiError(err, 'Failed to load product details'));
     } finally {
@@ -182,11 +204,30 @@ export default function ProductsPage() {
     if (!selectedProduct) return;
     try {
       setDrawerLoading(true);
+
+      const attributesPayload: Record<string, string> = {};
+      editAttributes.forEach((attr) => {
+        const k = attr.key.trim();
+        if (k) {
+          attributesPayload[k] = attr.value.trim();
+        }
+      });
+
+      const materialVal = attributesPayload["Material"] || attributesPayload["material"] || "";
+      const gradeVal = attributesPayload["Grade"] || attributesPayload["grade"] || "";
+      const applicationVal = attributesPayload["Application"] || attributesPayload["application"] || "";
+      const standardVal = attributesPayload["Standard"] || attributesPayload["standard"] || "";
+
       await productAPI.update(selectedProduct.id, {
         name: editName,
         description: editDescription,
         category: editCategory,
         productType: editProductType,
+        attributes: attributesPayload,
+        material: materialVal,
+        grade: gradeVal,
+        application: applicationVal,
+        standard: standardVal,
       });
       setEditMode(false);
       await handleRefreshDrawer(selectedProduct.id);
@@ -442,15 +483,24 @@ export default function ProductsPage() {
 
         {/* Master Catalog List (Lower Priority / Reference) */}
         <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)] backdrop-blur-sm">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-slate-900">📚 Global Catalog Registry</h2>
               <p className="text-sm text-slate-500">
                 View and edit all products that have been compiled in the global system.
               </p>
             </div>
-            <div className="rounded-2xl bg-slate-100 px-4 py-2 font-mono text-xs uppercase tracking-[0.25em] text-slate-700">
-              {products.length} total products
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/dashboard/products/add')}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 px-4 py-2.5 text-xs font-bold text-white shadow-md transition"
+              >
+                <Plus className="h-4 w-4" />
+                Add Product
+              </button>
+              <div className="rounded-2xl bg-slate-100 px-4 py-2 font-mono text-xs uppercase tracking-[0.25em] text-slate-700">
+                {products.length} total products
+              </div>
             </div>
           </div>
 
@@ -677,6 +727,65 @@ export default function ProductsPage() {
                         </select>
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                        Key Properties (Attributes)
+                      </label>
+                      <div className="space-y-2 bg-slate-55 p-3 rounded-xl border border-slate-200">
+                        {editAttributes.map((attr, index) => (
+                          <div key={attr.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                            <input
+                              type="text"
+                              value={attr.key}
+                              onChange={(e) => {
+                                const newAttrs = [...editAttributes];
+                                newAttrs[index].key = e.target.value;
+                                setEditAttributes(newAttrs);
+                              }}
+                              placeholder="Property (e.g. Material)"
+                              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                            />
+                            <input
+                              type="text"
+                              value={attr.value}
+                              onChange={(e) => {
+                                const newAttrs = [...editAttributes];
+                                newAttrs[index].value = e.target.value;
+                                setEditAttributes(newAttrs);
+                              }}
+                              placeholder="Value (e.g. Recycled PP)"
+                              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditAttributes(editAttributes.filter((_, i) => i !== index));
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-600 transition"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditAttributes([
+                              ...editAttributes,
+                              {
+                                id: `attr-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                                key: '',
+                                value: '',
+                              },
+                            ]);
+                          }}
+                          className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-slate-300 hover:border-blue-500 hover:text-blue-600 rounded-lg text-[10px] font-bold text-slate-600 transition bg-white"
+                        >
+                          <Plus className="h-3 w-3" /> Add Property
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex gap-2 justify-end pt-3">
                       <button
                         onClick={() => setEditMode(false)}
@@ -689,7 +798,7 @@ export default function ProductsPage() {
                         className="px-4 py-2 bg-blue-700 text-white rounded-xl hover:bg-blue-800 transition text-xs font-semibold flex items-center gap-1.5 shadow-xs"
                       >
                         <Save className="h-4 w-4" />
-                        Save Specifications
+                        Save Details
                       </button>
                     </div>
                   </div>
@@ -721,6 +830,53 @@ export default function ProductsPage() {
                         {selectedProduct.description || 'No description provided for catalog.'}
                       </p>
                     </div>
+                    {((selectedProduct.attributes && Object.keys(selectedProduct.attributes).length > 0) ||
+                      selectedProduct.material ||
+                      selectedProduct.grade ||
+                      selectedProduct.application ||
+                      selectedProduct.standard) && (
+                      <div className="pt-2">
+                        <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
+                          Key Properties (Attributes)
+                        </span>
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3.5">
+                          {selectedProduct.material && (
+                            <div className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
+                              <span className="text-slate-500 font-medium">Material</span>
+                              <span className="font-semibold text-slate-700">{selectedProduct.material}</span>
+                            </div>
+                          )}
+                          {selectedProduct.grade && (
+                            <div className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
+                              <span className="text-slate-500 font-medium">Grade</span>
+                              <span className="font-semibold text-slate-700">{selectedProduct.grade}</span>
+                            </div>
+                          )}
+                          {selectedProduct.application && (
+                            <div className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
+                              <span className="text-slate-500 font-medium">Application</span>
+                              <span className="font-semibold text-slate-700">{selectedProduct.application}</span>
+                            </div>
+                          )}
+                          {selectedProduct.standard && (
+                            <div className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
+                              <span className="text-slate-500 font-medium">Standard</span>
+                              <span className="font-semibold text-slate-700">{selectedProduct.standard}</span>
+                            </div>
+                          )}
+                          {selectedProduct.attributes &&
+                            Object.entries(selectedProduct.attributes)
+                              .filter(([key]) => !["material", "grade", "application", "standard"].includes(key.toLowerCase()))
+                              .map(([key, value]) => (
+                                <div key={key} className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
+                                  <span className="text-slate-500 capitalize">{key.replace(/_/g, " ")}</span>
+                                  <span className="font-semibold text-slate-700 text-right max-w-[60%] whitespace-pre-wrap">{String(value)}</span>
+                                </div>
+                              ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="pt-2 flex flex-wrap gap-3">
                       <div className="flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-3 py-1 text-xs font-medium text-slate-500">
                         <Calendar className="h-3.5 w-3.5" />

@@ -16,10 +16,18 @@ import {
     RefreshCcw,
     AlertTriangle,
     Edit2,
-    Calendar
+    Calendar,
+    X,
+    Package,
+    MapPin,
+    User,
+    Mail,
+    Phone,
+    FileText,
+    Navigation
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
-import { adminAPI, extractApiError } from '../../../lib/api';
+import { adminAPI, orderAPI, extractApiError } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { toast } from 'sonner';
 
@@ -61,6 +69,33 @@ export default function AdminPayoutsPage() {
     const [updatePercentage, setUpdatePercentage] = useState<number>(0);
     const [updateNotes, setUpdateNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
+
+    // Order Detail Drawer State
+    const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+    const [selectedDetailPayout, setSelectedDetailPayout] = useState<Payout | null>(null);
+    const [orderDetail, setOrderDetail] = useState<any | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState('');
+
+    async function loadOrderDetail(orderId: string) {
+        try {
+            setDetailLoading(true);
+            setDetailError('');
+            setOrderDetail(null);
+            const response = await orderAPI.getById(orderId);
+            setOrderDetail(response.data.data);
+        } catch (err) {
+            setDetailError(extractApiError(err, 'Failed to fetch order details.'));
+        } finally {
+            setDetailLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        if (selectedOrderId) {
+            void loadOrderDetail(selectedOrderId);
+        }
+    }, [selectedOrderId]);
 
     async function loadPayouts() {
         try {
@@ -211,7 +246,28 @@ export default function AdminPayoutsPage() {
             );
         }
 
-        return result;
+        // Sort active payouts with due dates (least due date first), then active payouts without due dates, then paid payouts
+        return [...result].sort((a, b) => {
+            const aIsActive = a.payout_status !== 'paid' && a.due_date !== null;
+            const bIsActive = b.payout_status !== 'paid' && b.due_date !== null;
+
+            if (aIsActive && !bIsActive) return -1;
+            if (!aIsActive && bIsActive) return 1;
+
+            if (aIsActive && bIsActive) {
+                const aTime = new Date(a.due_date!).getTime();
+                const bTime = new Date(b.due_date!).getTime();
+                return aTime - bTime;
+            }
+
+            const aIsPaid = a.payout_status === 'paid';
+            const bIsPaid = b.payout_status === 'paid';
+
+            if (aIsPaid && !bIsPaid) return 1;
+            if (!aIsPaid && bIsPaid) return -1;
+
+            return b.order_id.localeCompare(a.order_id);
+        });
     }, [payouts, searchQuery, statusFilter]);
 
     if (authLoading || !isAuthenticated) {
@@ -375,16 +431,60 @@ export default function AdminPayoutsPage() {
                             <tbody className="divide-y divide-slate-100">
                                 {filteredPayouts.map((payout) => {
                                     const daysBadge = getDaysLeft(payout.due_date, payout.payout_status);
+                                    
+                                    // Calculate alarm status: delivered (has due_date), unpaid/partially paid, and days remaining <= 7
+                                    let isAlarming = false;
+                                    let diffDays = 0;
+                                    if (payout.payout_status !== 'paid' && payout.due_date) {
+                                        const now = new Date();
+                                        const due = new Date(payout.due_date);
+                                        now.setHours(0, 0, 0, 0);
+                                        due.setHours(0, 0, 0, 0);
+                                        const diffTime = due.getTime() - now.getTime();
+                                        diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                        if (diffDays <= 7) {
+                                            isAlarming = true;
+                                        }
+                                    }
+
                                     return (
-                                        <tr key={payout.payout_id} className="hover:bg-slate-50/55 transition-colors">
+                                        <tr 
+                                            key={payout.payout_id} 
+                                            className={`transition-colors cursor-pointer ${
+                                                isAlarming 
+                                                    ? diffDays < 0 
+                                                        ? 'bg-rose-50/40 hover:bg-rose-50/60'
+                                                        : 'bg-amber-50/30 hover:bg-amber-50/50'
+                                                    : 'hover:bg-slate-50/55'
+                                            }`}
+                                            onClick={() => {
+                                                setSelectedOrderId(payout.order_id);
+                                                setSelectedDetailPayout(payout);
+                                            }}
+                                        >
                                             {/* Order Details */}
-                                            <td className="py-4 pl-2 whitespace-nowrap">
+                                            <td className={`py-4 pl-3 whitespace-nowrap border-l-4 ${
+                                                isAlarming 
+                                                    ? diffDays < 0 
+                                                        ? 'border-l-rose-500'
+                                                        : 'border-l-amber-500'
+                                                    : 'border-l-transparent'
+                                            }`}>
                                                 <div className="flex items-center gap-1.5">
+                                                    {isAlarming && (
+                                                        <span className="relative flex h-2 w-2 shrink-0">
+                                                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${diffDays < 0 ? 'bg-rose-400' : 'bg-amber-400'}`}></span>
+                                                            <span className={`relative inline-flex rounded-full h-2 w-2 ${diffDays < 0 ? 'bg-rose-500' : 'bg-amber-500'}`}></span>
+                                                        </span>
+                                                    )}
                                                     <span className="font-mono text-xs font-semibold text-slate-900">
                                                         #{payout.order_id.split('-')[0]}
                                                     </span>
                                                     <button 
-                                                        onClick={() => handleCopy(payout.order_id, payout.payout_id)}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleCopy(payout.order_id, payout.payout_id);
+                                                        }}
                                                         className="text-slate-400 hover:text-slate-600 transition"
                                                     >
                                                         {copiedId === payout.payout_id ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
@@ -467,7 +567,10 @@ export default function AdminPayoutsPage() {
                                             {/* Actions */}
                                             <td className="py-4 pr-2 text-right whitespace-nowrap">
                                                 <button
-                                                    onClick={() => handleOpenModal(payout)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleOpenModal(payout);
+                                                    }}
                                                     className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
                                                 >
                                                     <Edit2 className="h-3.5 w-3.5 text-slate-500" />
@@ -561,6 +664,314 @@ export default function AdminPayoutsPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Detail Drawer */}
+            {selectedOrderId && (
+                <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
+                    {/* Backdrop */}
+                    <div 
+                        className="absolute inset-0 bg-slate-950/40 backdrop-blur-xs transition-opacity" 
+                        onClick={() => setSelectedOrderId(null)} 
+                    />
+                    <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+                        <div className="w-screen max-w-2xl bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-300">
+                            {/* Header */}
+                            <div className="px-6 py-5 border-b border-slate-150 flex items-center justify-between bg-slate-50">
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-950">Payout Order Details</h2>
+                                    <p className="text-xs text-slate-400 font-mono mt-0.5">ID: {selectedOrderId}</p>
+                                </div>
+                                <button 
+                                    onClick={() => setSelectedOrderId(null)}
+                                    className="rounded-xl border border-slate-205 p-2 text-slate-400 hover:text-slate-650 hover:bg-slate-100 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                {detailLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                        <Loader2 className="w-8 h-8 text-blue-700 animate-spin" />
+                                        <p className="text-sm text-slate-500 font-medium">Fetching order info...</p>
+                                    </div>
+                                ) : detailError ? (
+                                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-750">
+                                        {detailError}
+                                    </div>
+                                ) : orderDetail ? (
+                                    <>
+                                        {/* Status Grid */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-slate-50/50 rounded-2xl border border-slate-100 p-4">
+                                                <p className="text-xs text-slate-400 font-medium uppercase">Order Status</p>
+                                                <p className="text-base font-bold text-slate-900 mt-1 capitalize">{orderDetail.status}</p>
+                                            </div>
+                                            <div className="bg-slate-50/50 rounded-2xl border border-slate-100 p-4">
+                                                <p className="text-xs text-slate-400 font-medium uppercase">Payment Status</p>
+                                                <p className="text-base font-bold text-slate-900 mt-1 capitalize">{orderDetail.payment_status}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Vendor Info Details */}
+                                        <div className="bg-slate-50/30 rounded-2xl border border-slate-150 p-4">
+                                            <p className="text-xs text-slate-400 font-medium uppercase">Vendor Partner</p>
+                                            <p className="text-base font-bold text-slate-900 mt-1">{orderDetail.vendor_name || "Unknown vendor"}</p>
+                                        </div>
+
+                                        {/* Payout Settlement Timeline */}
+                                        {selectedDetailPayout && (
+                                            <div className="border border-slate-150 rounded-2xl p-5 space-y-4">
+                                                <h3 className="font-bold text-slate-950 text-sm tracking-tight border-b border-slate-100 pb-2 flex items-center justify-between">
+                                                    <span>Payout Settlement Timeline</span>
+                                                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                                                        Cycle: {selectedDetailPayout.vendor_credit_cycle || 'Standard Terms'}
+                                                    </span>
+                                                </h3>
+                                                <div className="relative pl-6 border-l border-slate-150 space-y-6 py-2 ml-3">
+                                                    {/* Step 1: Order Delivered */}
+                                                    <div className="relative">
+                                                        <span className={`absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full ring-4 ${
+                                                            selectedDetailPayout.delivered_at ? 'bg-emerald-500 ring-emerald-50 text-white' : 'bg-slate-350 ring-slate-50'
+                                                        }`}>
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                                        </span>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-slate-900">Order Delivered</p>
+                                                            {selectedDetailPayout.delivered_at ? (
+                                                                <p className="text-xs text-slate-500 mt-0.5">
+                                                                    Delivered on {new Date(selectedDetailPayout.delivered_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                </p>
+                                                            ) : (
+                                                                <p className="text-xs text-slate-400 mt-0.5">Awaiting order delivery completion</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Step 2: Credit terms */}
+                                                    <div className="relative">
+                                                        <span className={`absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full ring-4 ${
+                                                            selectedDetailPayout.delivered_at ? 'bg-emerald-500 ring-emerald-50 text-white' : 'bg-slate-350 ring-slate-50'
+                                                        }`}>
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                                        </span>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-slate-900">Credit Cycle Term Active</p>
+                                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                                {selectedDetailPayout.vendor_credit_cycle || 'Standard terms (15 Days)'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Step 3: Expected payout */}
+                                                    <div className="relative">
+                                                        {(() => {
+                                                            const details = getDaysLeft(selectedDetailPayout.due_date, selectedDetailPayout.payout_status);
+                                                            const isFinished = selectedDetailPayout.payout_status === 'paid';
+                                                            const isActive = selectedDetailPayout.delivered_at && !isFinished;
+                                                            return (
+                                                                <>
+                                                                    <span className={`absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full ring-4 ${
+                                                                        isFinished ? 'bg-emerald-500 ring-emerald-50' : 
+                                                                        isActive ? 'bg-blue-500 ring-blue-50 animate-pulse' : 
+                                                                        'bg-slate-300 ring-slate-50'
+                                                                    }`}>
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                                                    </span>
+                                                                    <div>
+                                                                        <p className="text-sm font-bold text-slate-900">Estimated Settlement Date</p>
+                                                                        {selectedDetailPayout.due_date ? (
+                                                                            <div className="mt-1 flex flex-col gap-1">
+                                                                                <p className="text-xs text-slate-500">
+                                                                                    Expected Date: {new Date(selectedDetailPayout.due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                                </p>
+                                                                                <span className={`inline-flex items-center self-start rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${details.color}`}>
+                                                                                    {details.text}
+                                                                                </span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <p className="text-xs text-slate-400 mt-0.5">Will be calculated upon delivery</p>
+                                                                        )}
+                                                                    </div>
+                                                                </>
+                                                            );
+                                                        })()}
+                                                    </div>
+
+                                                    {/* Step 4: Admin release */}
+                                                    <div className="relative">
+                                                        <span className={`absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full ring-4 ${
+                                                            selectedDetailPayout.payout_status === 'paid' ? 'bg-emerald-500 ring-emerald-50' : 
+                                                            selectedDetailPayout.payout_status === 'partially_paid' ? 'bg-amber-500 ring-amber-50' : 
+                                                            'bg-slate-300 ring-slate-50'
+                                                        }`}>
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                                        </span>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-slate-900">Admin Release & Settlement</p>
+                                                            <div className="mt-1 space-y-1">
+                                                                <p className="text-xs text-slate-500">
+                                                                    Status: <span className="font-semibold uppercase text-slate-700">{selectedDetailPayout.payout_status}</span> 
+                                                                    {selectedDetailPayout.payout_status !== 'pending' && ` (${Number(selectedDetailPayout.payout_percentage).toFixed(0)}% settled)`}
+                                                                </p>
+                                                                {selectedDetailPayout.last_paid_at && (
+                                                                    <p className="text-xs text-slate-400">
+                                                                        Settled on: {new Date(selectedDetailPayout.last_paid_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                    </p>
+                                                                )}
+                                                                {selectedDetailPayout.payout_notes && (
+                                                                    <p className="text-xs text-slate-650 mt-1 bg-slate-50 border border-slate-100 p-2 rounded-xl mt-1.5">
+                                                                        Note: {selectedDetailPayout.payout_notes}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Customer & Address */}
+                                        <div className="border border-slate-150 rounded-2xl p-5 space-y-4">
+                                            <h3 className="font-bold text-slate-950 text-sm tracking-tight border-b border-slate-100 pb-2">Customer & Delivery Information</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <User className="w-4 h-4 text-slate-450 shrink-0" />
+                                                        <span className="font-medium text-slate-900">{orderDetail.customer_name}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2.5">
+                                                        <Mail className="w-4 h-4 text-slate-450 shrink-0" />
+                                                        <span className="text-slate-600 truncate">{orderDetail.customer_email}</span>
+                                                    </div>
+                                                    {orderDetail.customer_phone && (
+                                                        <div className="flex items-center gap-2.5">
+                                                            <Phone className="w-4 h-4 text-slate-450 shrink-0" />
+                                                            <span className="text-slate-600">{orderDetail.customer_phone}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-2.5">
+                                                    <MapPin className="w-4 h-4 text-slate-450 shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <p className="text-slate-850 leading-relaxed">
+                                                            {orderDetail.address_line}<br />
+                                                            {orderDetail.city}, {orderDetail.state} - {orderDetail.pincode}<br />
+                                                            {orderDetail.country}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Order Items */}
+                                        <div className="border border-slate-150 rounded-2xl p-5 space-y-4">
+                                            <h3 className="font-bold text-slate-950 text-sm tracking-tight border-b border-slate-100 pb-2">Ordered Products</h3>
+                                            <div className="divide-y divide-slate-100">
+                                                {orderDetail.items && orderDetail.items.map((item: any, idx: number) => (
+                                                    <div key={idx} className="py-4 flex items-start gap-4 first:pt-0 last:pb-0">
+                                                        <div className="w-14 h-14 bg-slate-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-slate-100 overflow-hidden">
+                                                            {item.image_url ? (
+                                                                <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <Package className="w-6 h-6 text-slate-300" />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className="font-bold text-slate-905 text-sm truncate">{item.product_name}</h4>
+                                                            {item.product_description && (
+                                                                <p className="text-xs text-slate-450 line-clamp-1 mt-0.5">{item.product_description}</p>
+                                                            )}
+                                                            <p className="text-xs text-slate-500 mt-1.5">
+                                                                Qty: <span className="font-semibold text-slate-800">{item.quantity}</span> • Price: <span className="font-semibold text-slate-800">₹{Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                            </p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="font-bold text-slate-950 text-sm">₹{Number(item.price * item.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="border-t border-slate-150 pt-3 flex justify-between items-center bg-slate-50/50 p-3 rounded-xl">
+                                                <span className="text-sm font-semibold text-slate-600">Total Order Amount</span>
+                                                <span className="text-base font-bold text-emerald-700">₹{Number(orderDetail.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Status History Timeline */}
+                                        <div className="border border-slate-150 rounded-2xl p-5 space-y-4">
+                                            <h3 className="font-bold text-slate-950 text-sm tracking-tight border-b border-slate-100 pb-2">Order Tracking Timeline</h3>
+                                            {orderDetail.status_history && orderDetail.status_history.length > 0 ? (
+                                                <div className="relative pl-6 border-l border-slate-150 space-y-6 py-2 ml-3">
+                                                    {orderDetail.status_history.map((history: any, index: number) => (
+                                                        <div key={history.id || index} className="relative">
+                                                            <span className="absolute -left-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 ring-4 ring-emerald-50 text-white">
+                                                                <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                                            </span>
+                                                            <div>
+                                                                <p className="text-sm font-bold text-slate-900 capitalize">
+                                                                    {history.status.replaceAll('_', ' ')}
+                                                                </p>
+                                                                <p className="text-[11px] text-slate-400 mt-0.5">
+                                                                    {new Date(history.created_at).toLocaleString('en-IN', {
+                                                                        day: 'numeric',
+                                                                        month: 'short',
+                                                                        hour: '2-digit',
+                                                                        minute: '2-digit'
+                                                                    })}
+                                                                </p>
+                                                                {history.note && (
+                                                                    <p className="text-xs text-slate-650 mt-1 bg-slate-50 border border-slate-100 p-2 rounded-xl">
+                                                                        {history.note}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="relative pl-6 border-l border-slate-150 space-y-6 py-2 ml-3">
+                                                    {/* Custom standard fallback timeline */}
+                                                    <div className="relative">
+                                                        <span className="absolute -left-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 ring-4 ring-emerald-50">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                                        </span>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-slate-900 capitalize">{orderDetail.status}</p>
+                                                            <p className="text-[11px] text-slate-400 mt-0.5">Current order state</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="relative">
+                                                        <span className="absolute -left-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-350 ring-4 ring-slate-100">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                                        </span>
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-slate-400">Order Placed</p>
+                                                            <p className="text-[11px] text-slate-400 mt-0.5">
+                                                                {new Date(orderDetail.created_at).toLocaleString('en-IN', {
+                                                                    day: 'numeric',
+                                                                    month: 'short',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-center py-20 text-slate-450 italic">
+                                        No information found for this order.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

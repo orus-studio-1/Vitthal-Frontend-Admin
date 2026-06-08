@@ -36,6 +36,11 @@ export interface Product {
   description?: string | null;
   category?: string | null;
   product_type?: string | null;
+  attributes?: Record<string, any>;
+  material?: string;
+  grade?: string;
+  application?: string;
+  standard?: string;
   specifications: Record<string, unknown> | unknown[];
   approval_status: ApprovalStatus;
   approval_notes?: string | null;

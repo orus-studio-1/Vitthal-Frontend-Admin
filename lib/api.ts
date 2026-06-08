@@ -86,8 +86,22 @@ export const productAPI = {
     description: string;
     category: string;
     productType: string;
-    specifications: string;
+    specifications: any;
+    attributes?: Record<string, string>;
+    material?: string;
+    grade?: string;
+    application?: string;
+    standard?: string;
+    itemCode?: string | null;
+    quotationLimit?: number | null;
   }) => api.post<ApiResponse<Product>>('/api/products/addProduct', data),
+
+  uploadProductImages: (formData: FormData) =>
+    api.post<ApiResponse<any>>('/api/products/uploadProductImages', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }),
 
   getAll: () => api.get<ApiResponse<Product[]>>('/api/products'),
 
@@ -146,6 +160,11 @@ export const productAPI = {
       productType: string;
       specifications: string;
       is_active: boolean;
+      attributes: Record<string, string>;
+      material?: string;
+      grade?: string;
+      application?: string;
+      standard?: string;
     }>
   ) => api.put<ApiResponse<Product>>(`/api/products/${id}`, data),
 
@@ -176,6 +195,9 @@ export const orderAPI = {
 
   updateStatus: (id: string, status: OrderStatus) =>
     api.patch<ApiResponse<Order>>(`/api/orders/${id}/status`, { status }),
+
+  getById: (id: string) =>
+    api.get<ApiResponse<any>>(`/api/orders/${id}`),
 };
 
 export const vendorAPI = {
