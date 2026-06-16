@@ -54,6 +54,7 @@ export default function ProductsPage() {
   
   const [products, setProducts] = useState<Product[]>([]);
   const [pendingListings, setPendingListings] = useState<PendingVendorListing[]>([]);
+  const [pendingVariants, setPendingVariants] = useState<any[]>([]);
   const [categoriesOptions, setCategoriesOptions] = useState<any[]>([]);
   const [productTypes, setProductTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,14 +103,16 @@ export default function ProductsPage() {
       setLoading(true);
       setError('');
       
-      // Fetch both products and pending catalog listings in parallel
-      const [productsRes, listingsRes] = await Promise.all([
+      // Fetch products, pending listings, and pending variants in parallel
+      const [productsRes, listingsRes, variantsRes] = await Promise.all([
         productAPI.getAll(),
-        productAPI.getPendingVendorProducts()
+        productAPI.getPendingVendorProducts(),
+        productAPI.getPendingVariants()
       ]);
       
       setProducts(productsRes.data.data);
       setPendingListings(listingsRes.data.data || []);
+      setPendingVariants(variantsRes.data.data || []);
     } catch (productsError) {
       setError(extractApiError(productsError, 'Failed to load products'));
     } finally {
@@ -281,6 +284,20 @@ export default function ProductsPage() {
       }
     } catch (err) {
       setError(extractApiError(err, `Failed to ${decision} vendor listing`));
+    }
+  };
+
+  const handleReviewVariant = async (variantId: string, decision: 'approved' | 'rejected') => {
+    try {
+      setError('');
+      await productAPI.reviewProductVariant(variantId, decision);
+      if (selectedProduct) {
+        await handleRefreshDrawer(selectedProduct.id);
+      } else {
+        await fetchProducts();
+      }
+    } catch (err) {
+      setError(extractApiError(err, `Failed to ${decision} variant`));
     }
   };
 
@@ -496,6 +513,98 @@ export default function ProductsPage() {
           ) : (
             <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-sm text-slate-400">
               Clear! No sellers are waiting for catalog mapping activation.
+            </p>
+          )}
+        </section>
+
+        {/* ✨ QUEUE 3: PRODUCT VARIATION APPROVALS (HIGH PRIORITY) */}
+        <section className="rounded-[1.75rem] border border-violet-200 bg-white p-6 shadow-[0_12px_32px_rgba(139,92,246,0.06)] relative overflow-hidden">
+          <div className="absolute top-0 right-0 h-32 w-32 bg-violet-500/5 rounded-full blur-2xl -mr-8 -mt-8" />
+          
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 border border-violet-100">
+                <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+                </span>
+                <Package2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">✨ Product Variation Approvals</h2>
+                <p className="text-sm text-slate-500">Pending product specifications / variations proposed by vendors.</p>
+              </div>
+            </div>
+            <div className="self-start sm:self-center rounded-full bg-violet-50 border border-violet-200 px-3 py-1 font-mono text-xs font-bold text-violet-700">
+              {pendingVariants.length} Awaiting Review
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+            </div>
+          ) : pendingVariants.length ? (
+            <div className="space-y-3">
+              {pendingVariants.map((variant) => (
+                <article
+                  key={variant.variant_id}
+                  className="rounded-2xl border border-slate-150 bg-slate-50/50 p-4 hover:border-violet-300 hover:bg-white transition-all shadow-xs duration-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
+                        {variant.creator_name || 'Vendor'} ({variant.creator_email || 'No Email'})
+                      </span>
+                      <span className="text-[10px] font-semibold bg-violet-50 text-violet-700 border border-violet-100 rounded-full px-2 py-0.5 uppercase tracking-wider">
+                        New Variant
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-slate-900 text-sm">
+                      wants to add variation to:{' '}
+                      <span
+                        className="text-violet-700 underline cursor-pointer"
+                        onClick={() => handleOpenDrawer({ id: variant.product_id } as Product)}
+                      >
+                        {variant.product_name}
+                      </span>
+                    </h4>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-1">
+                      <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        {Object.entries(variant.properties || {})
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(', ') || 'Default Variant'}
+                      </span>
+                      {variant.sku && (
+                        <span className="text-slate-400 font-mono text-[11px]">
+                          SKU: {variant.sku}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleReviewVariant(variant.variant_id, 'approved')}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleReviewVariant(variant.variant_id, 'rejected')}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Reject
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-sm text-slate-400">
+              Clear! No product variations are awaiting approval.
             </p>
           )}
         </section>
@@ -1047,6 +1156,86 @@ export default function ProductsPage() {
                   </div>
                 ) : (
                   <p className="text-slate-400 text-xs py-4 text-center">No product specifications.</p>
+                )}
+              </section>
+
+              {/* Product Variants Drawer Section */}
+              <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Package2 className="h-5 w-5 text-violet-500" />
+                    <h4 className="font-bold text-slate-900">Product Variants / Specifications</h4>
+                  </div>
+                  <span className="text-xs font-mono text-slate-400 uppercase">
+                    {selectedProduct.variants?.length || 0} variants
+                  </span>
+                </div>
+
+                {selectedProduct.variants?.length ? (
+                  <div className="space-y-4">
+                    {selectedProduct.variants.map((v) => (
+                      <div
+                        key={v.id}
+                        className="rounded-xl border border-slate-200 bg-white p-4 space-y-3"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              {Object.entries(v.properties || {})
+                                .map(([key, val]) => `${key}: ${val}`)
+                                .join(', ') || 'Default Variant'}
+                            </span>
+                            {v.sku && (
+                              <p className="text-xs text-slate-500 mt-1 font-mono">
+                                SKU: {v.sku}
+                              </p>
+                            )}
+                            {v.creator_name && (
+                              <p className="text-[11px] text-slate-400 mt-0.5">
+                                Creator: {v.creator_name} ({v.creator_email})
+                              </p>
+                            )}
+                          </div>
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${
+                            v.approval_status === 'approved'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              : v.approval_status === 'rejected'
+                              ? 'bg-red-100 text-red-800 border border-red-200'
+                              : 'bg-amber-100 text-amber-800 border border-amber-200'
+                          }`}>
+                            {v.approval_status}
+                          </span>
+                        </div>
+
+                        {v.approval_notes && (
+                          <p className="text-xs italic text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            Notes: {v.approval_notes}
+                          </p>
+                        )}
+
+                        {v.approval_status === 'pending' && (
+                          <div className="flex gap-2 pt-1 justify-end">
+                            <button
+                              onClick={() => handleReviewVariant(v.id, 'approved')}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Approve Variant
+                            </button>
+                            <button
+                              onClick={() => handleReviewVariant(v.id, 'rejected')}
+                              className="px-3 py-1.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition"
+                            >
+                              <XCircle className="h-3.5 w-3.5" />
+                              Reject Variant
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 text-xs py-4 text-center">No variants configured.</p>
                 )}
               </section>
 

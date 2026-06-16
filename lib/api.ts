@@ -157,6 +157,12 @@ export const productAPI = {
   reviewPendingPriceChange: (id: string, decision: 'approved' | 'rejected') =>
     api.put<ApiResponse<any>>(`/api/products/pending-price/${id}/review`, { decision }),
 
+  getPendingVariants: () =>
+    api.get<ApiResponse<any[]>>('/api/products/pending-variants/all'),
+
+  reviewProductVariant: (variantId: string, decision: 'approved' | 'rejected', notes?: string) =>
+    api.put<ApiResponse<any>>(`/api/products/pending-variants/${variantId}/review`, { decision, notes }),
+
   update: (
     id: string,
     data: Partial<{

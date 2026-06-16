@@ -87,6 +87,16 @@ export interface Product {
     vendor_email: string;
     gst_percentage?: number;
   }>;
+  variants?: Array<{
+    id: string;
+    sku: string | null;
+    properties: Record<string, string>;
+    approval_status: 'pending' | 'approved' | 'rejected';
+    approval_notes?: string | null;
+    created_at: string;
+    creator_name?: string | null;
+    creator_email?: string | null;
+  }>;
 }
 
 export interface ProductFormData {
