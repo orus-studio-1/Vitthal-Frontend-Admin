@@ -103,6 +103,12 @@ export const productAPI = {
       },
     }),
 
+  addProductVariant: (data: {
+    productId: string;
+    sku: string | null;
+    properties: Record<string, string>;
+  }) => api.post<ApiResponse<any>>('/api/products/addProductVariant', data),
+
   getAll: () => api.get<ApiResponse<Product[]>>('/api/products'),
 
   getCategories: () => api.get<ApiResponse<any[]>>('/api/products/getCategories'),

@@ -86,6 +86,13 @@ export default function AddProductPage() {
     createSpecificationDraft(),
   ]);
 
+  // Variant States
+  const [hasMultipleVariants, setHasMultipleVariants] = useState<boolean>(false);
+  const [variantType, setVariantType] = useState<string>("Size");
+  const [creationVariants, setCreationVariants] = useState<Array<{ id: string; value: string; sku: string }>>([
+    { id: "v-1", value: "", sku: "" },
+  ]);
+
   // Images states
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
   const [primaryImageIndex, setPrimaryImageIndex] = useState<number>(0);
@@ -256,6 +263,22 @@ export default function AddProductPage() {
 
       if (!finalProductId) {
         throw new Error("Failed to retrieve product ID from registry response.");
+      }
+
+      // 1b. Create product variants if configured
+      if (hasMultipleVariants) {
+        const activeVariants = creationVariants.filter(v => v.value.trim().length > 0);
+        if (activeVariants.length === 0) {
+          throw new Error("Please configure at least one variation option value when variations are enabled.");
+        }
+        for (const variant of activeVariants) {
+          const propObj = { [variantType]: variant.value.trim() };
+          await productAPI.addProductVariant({
+            productId: finalProductId,
+            sku: variant.sku.trim() || null,
+            properties: propObj,
+          });
+        }
       }
 
       // 2. Upload images if selected
@@ -582,6 +605,100 @@ export default function AddProductPage() {
                 className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition leading-relaxed"
               />
             </div>
+          </section>
+
+          {/* Configure Variations Section */}
+          <section className="bg-white rounded-[1.75rem] border border-slate-200 p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">✨ Configure Variations (Optional)</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Does this catalog product have multiple variations (e.g., Size, Color, Grade)? Enable this to define variants.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHasMultipleVariants(!hasMultipleVariants)}
+                className="text-xs font-bold text-blue-700 hover:text-blue-800 transition flex items-center gap-1 bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200"
+              >
+                {hasMultipleVariants ? "Disable Variations" : "Enable Variations"}
+              </button>
+            </div>
+
+            {hasMultipleVariants && (
+              <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200 animate-in fade-in slide-in-from-top-2 duration-250">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Variation Type / Dimension Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={variantType}
+                      onChange={(e) => setVariantType(e.target.value)}
+                      placeholder="e.g. Size, Grade, Color"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Configure Variant Options (E.g. Option: 10mm, SKU: BB-10MM) *
+                  </label>
+                  {creationVariants.map((variant, index) => (
+                    <div key={variant.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1.2fr_auto] gap-3 items-center">
+                      <input
+                        type="text"
+                        value={variant.value}
+                        onChange={(e) => {
+                          const updated = [...creationVariants];
+                          updated[index].value = e.target.value;
+                          setCreationVariants(updated);
+                        }}
+                        placeholder="Option value (e.g., 10mm)"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                      />
+                      <input
+                        type="text"
+                        value={variant.sku}
+                        onChange={(e) => {
+                          const updated = [...creationVariants];
+                          updated[index].sku = e.target.value;
+                          setCreationVariants(updated);
+                        }}
+                        placeholder="SKU / Item Code (Optional)"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreationVariants(
+                            creationVariants.filter((v) => v.id !== variant.id)
+                          );
+                        }}
+                        className="p-2 border border-slate-200 rounded-xl bg-white text-slate-400 hover:bg-red-50 hover:text-red-650 transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreationVariants([
+                        ...creationVariants,
+                        { id: `v-${Date.now()}-${Math.random().toString(36).slice(2)}`, value: "", sku: "" },
+                      ]);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-slate-350 hover:border-blue-500 hover:text-blue-600 rounded-lg text-xs font-semibold text-slate-600 transition bg-white"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Variation Option
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Media Files */}
