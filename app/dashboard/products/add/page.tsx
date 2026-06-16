@@ -72,6 +72,7 @@ export default function AddProductPage() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [productType, setProductType] = useState("");
+  const [productTypes, setProductTypes] = useState<string[]>([]);
   const [quotationLimit, setQuotationLimit] = useState("");
 
   const [attributes, setAttributes] = useState<AttributeDraft[]>([
@@ -111,7 +112,18 @@ export default function AddProductPage() {
         setIsLoadingCats(false);
       }
     }
+    async function loadTypes() {
+      try {
+        const response = await productAPI.getProductTypes();
+        if (response.data?.data) {
+          setProductTypes(response.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load product types:", err);
+      }
+    }
     loadCats();
+    loadTypes();
   }, []);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -433,29 +445,25 @@ export default function AddProductPage() {
                 </select>
               </div>
 
-              {/* Product Type Select */}
+              {/* Product Type Custom Input with Datalist */}
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                   Product Type *
                 </label>
-                <select
+                <input
+                  type="text"
+                  list="product-types-list"
                   value={productType}
                   onChange={(e) => setProductType(e.target.value)}
+                  placeholder="Enter or select type"
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   required
-                >
-                  <option value="">Select Type</option>
-                  <option value="hdpe">HDPE</option>
-                  <option value="pet">PET</option>
-                  <option value="aluminum">Aluminum</option>
-                  <option value="pp">PP (Polypropylene)</option>
-                  <option value="ldpe">LDPE</option>
-                  <option value="pvc">PVC</option>
-                  <option value="steel">Steel</option>
-                  <option value="copper">Copper</option>
-                  <option value="plastic">Plastic</option>
-                  <option value="metal">Metal</option>
-                </select>
+                />
+                <datalist id="product-types-list">
+                  {productTypes.map((type) => (
+                    <option key={type} value={type} />
+                  ))}
+                </datalist>
               </div>
 
             </div>

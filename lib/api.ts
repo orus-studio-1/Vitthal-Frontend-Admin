@@ -151,6 +151,12 @@ export const productAPI = {
   getPendingVendorProducts: () =>
     api.get<ApiResponse<any[]>>('/api/products/pending-vendor/all'),
 
+  getPendingPriceChanges: () =>
+    api.get<ApiResponse<any[]>>('/api/products/pending-price/all'),
+
+  reviewPendingPriceChange: (id: string, decision: 'approved' | 'rejected') =>
+    api.put<ApiResponse<any>>(`/api/products/pending-price/${id}/review`, { decision }),
+
   update: (
     id: string,
     data: Partial<{
@@ -169,6 +175,8 @@ export const productAPI = {
   ) => api.put<ApiResponse<Product>>(`/api/products/${id}`, data),
 
   delete: (id: string) => api.delete<{ message: string }>(`/api/products/${id}`),
+
+  getProductTypes: () => api.get<ApiResponse<string[]>>('/api/products/getProductTypes'),
 };
 
 export const orderAPI = {

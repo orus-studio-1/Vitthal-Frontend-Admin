@@ -71,10 +71,12 @@ export interface Product {
     approval_status: 'pending' | 'approved' | 'rejected';
     is_approved: boolean;
     created_by_user_id?: string | null;
+    media_type?: 'image' | 'video';
   }>;
   detailed_vendors?: Array<{
     id: string;
     price: number;
+    pending_price?: number | null;
     moq: number;
     stock_quantity: number;
     is_active: boolean;
@@ -83,6 +85,7 @@ export interface Product {
     company_name: string;
     vendor_name: string;
     vendor_email: string;
+    gst_percentage?: number;
   }>;
 }
 

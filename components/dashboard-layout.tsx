@@ -24,6 +24,7 @@ import {
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Products', href: '/dashboard/products', icon: Package },
+  { name: 'Price Approvals', href: '/dashboard/products/price-approvals', icon: DollarSign },
   { name: 'Categories', href: '/dashboard/categories', icon: Tags },
   { name: 'Vendors', href: '/dashboard/vendors', icon: Building2 },
   { name: 'Vendor Chat', href: '/dashboard/vendor-chat', icon: MessageSquare },

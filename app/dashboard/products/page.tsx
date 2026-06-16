@@ -45,6 +45,7 @@ interface PendingVendorListing {
   vendor_company_name: string;
   vendor_user_name: string;
   vendor_user_email: string;
+  gst_percentage?: number;
 }
 
 export default function ProductsPage() {
@@ -54,6 +55,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [pendingListings, setPendingListings] = useState<PendingVendorListing[]>([]);
   const [categoriesOptions, setCategoriesOptions] = useState<any[]>([]);
+  const [productTypes, setProductTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -68,7 +70,18 @@ export default function ProductsPage() {
         console.error("Failed to load categories:", err);
       }
     }
+    async function loadTypes() {
+      try {
+        const response = await productAPI.getProductTypes();
+        if (response.data?.data) {
+          setProductTypes(response.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load product types:", err);
+      }
+    }
     loadCats();
+    loadTypes();
   }, []);
 
   // Selected product / details drawer states
@@ -439,7 +452,7 @@ export default function ProductsPage() {
 
                   {/* B2B Specs & Direct Approve actions */}
                   <div className="flex flex-wrap items-center gap-4 self-stretch justify-between lg:justify-end">
-                    <div className="grid grid-cols-3 gap-3 bg-white border border-slate-100 rounded-xl p-2.5 text-center text-xs font-medium min-w-[240px]">
+                    <div className="grid grid-cols-4 gap-3 bg-white border border-slate-100 rounded-xl p-2.5 text-center text-xs font-medium min-w-[320px]">
                       <div>
                         <span className="text-slate-400 block text-[9px] uppercase font-mono">Price</span>
                         <span className="font-bold text-slate-800">₹{listing.price}</span>
@@ -451,6 +464,12 @@ export default function ProductsPage() {
                       <div>
                         <span className="text-slate-400 block text-[9px] uppercase font-mono">Stock</span>
                         <span className="font-bold text-slate-800">{listing.stock_quantity}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[9px] uppercase font-mono">GST %</span>
+                        <span className="font-bold text-slate-800">
+                          {listing.gst_percentage !== null && listing.gst_percentage !== undefined ? `${listing.gst_percentage}%` : '0%'}
+                        </span>
                       </div>
                     </div>
 
@@ -716,15 +735,19 @@ export default function ProductsPage() {
                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
                           Product Type
                         </label>
-                        <select
+                        <input
+                          type="text"
+                          list="product-types-list"
                           value={editProductType}
                           onChange={(e) => setEditProductType(e.target.value)}
+                          placeholder="Select or enter type..."
                           className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                        >
-                          <option value="">Select type...</option>
-                          <option value="plastic">Plastic</option>
-                          <option value="metal">Metal</option>
-                        </select>
+                        />
+                        <datalist id="product-types-list">
+                          {productTypes.map((type) => (
+                            <option key={type} value={type} />
+                          ))}
+                        </datalist>
                       </div>
                     </div>
                     <div>
@@ -920,12 +943,20 @@ export default function ProductsPage() {
                           img.is_primary ? 'border-blue-500 ring-2 ring-blue-500/10' : 'border-slate-200'
                         }`}
                       >
-                        <div className="relative aspect-video rounded-lg overflow-hidden border border-slate-100 bg-white">
-                          <img
-                            src={img.image_url}
-                            alt="Upload preview"
-                            className="w-full h-full object-cover"
-                          />
+                        <div className="relative aspect-video rounded-lg overflow-hidden border border-slate-100 bg-white flex items-center justify-center">
+                          {img.media_type === 'video' ? (
+                            <video
+                              src={img.image_url}
+                              controls
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <img
+                              src={img.image_url}
+                              alt="Upload preview"
+                              className="w-full h-full object-cover"
+                            />
+                          )}
                           <span className={`absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
                             img.approval_status === 'approved'
                               ? 'bg-emerald-600 text-white'
@@ -933,7 +964,7 @@ export default function ProductsPage() {
                               ? 'bg-red-600 text-white'
                               : 'bg-amber-500 text-white'
                           }`}>
-                            {img.approval_status}
+                            {img.media_type === 'video' ? 'video: ' : ''}{img.approval_status}
                           </span>
                         </div>
                         
@@ -1058,7 +1089,7 @@ export default function ProductsPage() {
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100 bg-slate-50/50 rounded-lg p-2 text-xs">
+                        <div className="grid grid-cols-4 gap-2 py-2 border-y border-slate-100 bg-slate-50/50 rounded-lg p-2 text-xs">
                           <div>
                             <span className="text-slate-400 block uppercase font-mono">Price</span>
                             <span className="font-bold text-slate-800">₹{vendor.price}</span>
@@ -1070,6 +1101,12 @@ export default function ProductsPage() {
                           <div>
                             <span className="text-slate-400 block uppercase font-mono">Stock</span>
                             <span className="font-bold text-slate-800">{vendor.stock_quantity}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block uppercase font-mono">GST %</span>
+                            <span className="font-bold text-slate-800">
+                              {vendor.gst_percentage !== null && vendor.gst_percentage !== undefined ? `${vendor.gst_percentage}%` : '0%'}
+                            </span>
                           </div>
                         </div>
 
