@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Activity,
+  AlertTriangle,
   Building2,
+  CheckCircle2,
   DollarSign,
   Loader2,
   Package,
@@ -15,6 +17,18 @@ import DashboardLayout from '../../components/dashboard-layout';
 import { adminAPI, extractApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import { DashboardStats } from '../../lib/types';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Doughnut } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 export default function DashboardPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -78,6 +92,99 @@ export default function DashboardPage() {
     return colors[status] || 'bg-slate-100 text-slate-700';
   };
 
+  const statusChartData = useMemo(() => {
+    const entries = Object.entries(stats?.orderStats || {});
+    return {
+      labels: entries.map(([status]) => status.replaceAll('_', ' ')),
+      datasets: [
+        {
+          data: entries.map(([, count]) => count),
+          backgroundColor: ['#f59e0b', '#2563eb', '#7c3aed', '#059669', '#dc2626'],
+          borderWidth: 0,
+        },
+      ],
+    };
+  }, [stats]);
+
+  const recentOrderBarData = useMemo(() => {
+    const orders = stats?.recentOrders || [];
+    return {
+      labels: orders.map((order) => (order.customer_name || 'Order').slice(0, 12)),
+      datasets: [
+        {
+          label: 'Order amount',
+          data: orders.map((order) => Number(order.total_amount || 0)),
+          backgroundColor: '#1f4c45',
+          borderRadius: 8,
+        },
+      ],
+    };
+  }, [stats]);
+
+  const sourceChartData = useMemo(() => {
+    const sourceCounts = (stats?.recentOrders || []).reduce<Record<string, number>>((acc, order) => {
+      acc[order.source || 'unknown'] = (acc[order.source || 'unknown'] || 0) + 1;
+      return acc;
+    }, {});
+    const entries = Object.entries(sourceCounts);
+    return {
+      labels: entries.map(([source]) => source.replaceAll('_', ' ')),
+      datasets: [
+        {
+          data: entries.map(([, count]) => count),
+          backgroundColor: ['#0f766e', '#2563eb', '#f59e0b', '#7c3aed'],
+          borderWidth: 0,
+        },
+      ],
+    };
+  }, [stats]);
+
+  const dashboardMetrics = useMemo(() => {
+    const orderStats = stats?.orderStats || {};
+    const totalOrders = stats?.totals.orders || 0;
+    const delivered = orderStats.delivered || 0;
+    const pending = orderStats.pending || 0;
+    const recentOrders = stats?.recentOrders || [];
+    const recentRevenue = recentOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+    const avgRecentOrder = recentOrders.length ? recentRevenue / recentOrders.length : 0;
+    const activeVendorRatio = stats?.totals.vendors ? Math.round(((stats.totals.activeVendors || 0) / stats.totals.vendors) * 100) : 0;
+
+    return [
+      {
+        label: 'Completion rate',
+        value: totalOrders ? `${Math.round((delivered / totalOrders) * 100)}%` : '0%',
+        detail: `${delivered} delivered of ${totalOrders}`,
+        icon: CheckCircle2,
+        tone: 'bg-emerald-50 text-emerald-700',
+      },
+      {
+        label: 'Pending workload',
+        value: pending,
+        detail: 'Orders waiting for action',
+        icon: AlertTriangle,
+        tone: 'bg-amber-50 text-amber-700',
+      },
+      {
+        label: 'Avg recent order',
+        value: `₹${Math.round(avgRecentOrder).toLocaleString('en-IN')}`,
+        detail: `${recentOrders.length} latest orders`,
+        icon: DollarSign,
+        tone: 'bg-blue-50 text-blue-700',
+      },
+      {
+        label: 'Active vendor ratio',
+        value: `${activeVendorRatio}%`,
+        detail: `${stats?.totals.activeVendors || 0} active of ${stats?.totals.vendors || 0}`,
+        icon: Building2,
+        tone: 'bg-violet-50 text-violet-700',
+      },
+    ];
+  }, [stats]);
+
+  const openOrderDetail = (orderId: string) => {
+    router.push(`/dashboard/orders?orderId=${orderId}`);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -122,6 +229,67 @@ export default function DashboardPage() {
               ))}
             </section>
 
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {dashboardMetrics.map((metric) => (
+                <article key={metric.label} className="rounded-[1.35rem] border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_12px_32px_rgba(96,82,62,0.08)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[#746b5f]">{metric.label}</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-900">{metric.value}</p>
+                      <p className="mt-1 text-sm text-slate-500">{metric.detail}</p>
+                    </div>
+                    <div className={`shrink-0 rounded-[1rem] p-3 ${metric.tone}`}>
+                      <metric.icon className="h-5 w-5" />
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-3">
+              <article className="rounded-[1.6rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)]">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-slate-900">Recent order value</h2>
+                  <ShoppingCart className="h-5 w-5 text-[#746b5f]" />
+                </div>
+                <div className="min-h-[260px]">
+                  {stats?.recentOrders.length ? (
+                    <Bar data={recentOrderBarData} options={{ responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }} />
+                  ) : (
+                    <div className="flex min-h-[260px] items-center justify-center text-sm text-slate-500">No recent order values available.</div>
+                  )}
+                </div>
+              </article>
+
+              <article className="rounded-[1.6rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)]">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-slate-900">Fulfillment status share</h2>
+                  <Activity className="h-5 w-5 text-[#746b5f]" />
+                </div>
+                <div className="mx-auto max-w-[300px]">
+                  {Object.entries(stats?.orderStats || {}).length ? (
+                    <Doughnut data={statusChartData} options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }} />
+                  ) : (
+                    <div className="flex min-h-[260px] items-center justify-center text-sm text-slate-500">No status distribution available.</div>
+                  )}
+                </div>
+              </article>
+
+              <article className="rounded-[1.6rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)]">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-slate-900">Recent order source</h2>
+                  <Building2 className="h-5 w-5 text-[#746b5f]" />
+                </div>
+                <div className="mx-auto max-w-[300px]">
+                  {stats?.recentOrders.length ? (
+                    <Doughnut data={sourceChartData} options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }} />
+                  ) : (
+                    <div className="flex min-h-[260px] items-center justify-center text-sm text-slate-500">No source mix available.</div>
+                  )}
+                </div>
+              </article>
+            </section>
+
             <section className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
               <article className="h-full rounded-[1.6rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)] backdrop-blur-sm">
                 <div className="mb-4 flex items-center justify-between">
@@ -131,7 +299,7 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   {stats?.recentOrders.length ? (
                     stats.recentOrders.map((order) => (
-                      <div key={order.id} className="flex flex-col gap-3 rounded-[1.35rem] border border-[rgba(31,76,69,0.08)] bg-[rgba(255,255,255,0.58)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                      <button key={order.id} type="button" onClick={() => openOrderDetail(order.id)} className="flex w-full flex-col gap-3 rounded-[1.35rem] border border-[rgba(31,76,69,0.08)] bg-[rgba(255,255,255,0.58)] px-4 py-4 text-left transition hover:border-[#1f4c45] hover:bg-white sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="font-medium text-slate-900">{order.customer_name}</p>
                           <p className="text-sm text-slate-500">{order.product_name || 'Unknown Product'} with {order.vendor_name || 'Unknown Vendor'}</p>
@@ -142,7 +310,7 @@ export default function DashboardPage() {
                             {order.status.replaceAll('_', ' ')}
                           </span>
                         </div>
-                      </div>
+                      </button>
                     ))
                   ) : (
                     <p className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">No recent orders found.</p>
@@ -175,6 +343,7 @@ export default function DashboardPage() {
                 </div>
               </article>
             </section>
+
           </>
         )}
       </div>

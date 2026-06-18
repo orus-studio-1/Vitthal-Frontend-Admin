@@ -188,6 +188,8 @@ export default function AdminPayoutsPage() {
         let totalPaid = 0;
         let pendingCount = 0;
         let overdueCount = 0;
+        let partialCount = 0;
+        let paidCount = 0;
 
         payouts.forEach(p => {
             const orderAmt = Number(p.order_total_amount);
@@ -208,15 +210,28 @@ export default function AdminPayoutsPage() {
                     }
                 }
             }
+            if (p.payout_status === 'partially_paid') partialCount++;
+            if (p.payout_status === 'paid') paidCount++;
         });
 
         return {
             totalOwed,
             totalPaid,
             pendingCount,
-            overdueCount
+            overdueCount,
+            partialCount,
+            paidCount,
+            allCount: payouts.length
         };
     }, [payouts]);
+
+    const payoutFilterBlocks = useMemo(() => [
+        { val: 'all', label: 'All', count: stats.allCount, icon: CreditCard, tone: 'border-slate-200 bg-white text-slate-700' },
+        { val: 'overdue', label: 'Overdue', count: stats.overdueCount, icon: AlertTriangle, tone: 'border-rose-200 bg-rose-50 text-rose-700' },
+        { val: 'pending', label: 'Pending', count: payouts.filter(p => p.payout_status === 'pending').length, icon: Clock, tone: 'border-amber-200 bg-amber-50 text-amber-700' },
+        { val: 'partially_paid', label: 'Partial', count: stats.partialCount, icon: RefreshCcw, tone: 'border-blue-200 bg-blue-50 text-blue-700' },
+        { val: 'paid', label: 'Paid', count: stats.paidCount, icon: CheckCircle2, tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+    ], [payouts, stats]);
 
     // Search and Filter logic
     const filteredPayouts = useMemo(() => {
@@ -246,8 +261,20 @@ export default function AdminPayoutsPage() {
             );
         }
 
-        // Sort active payouts with due dates (least due date first), then active payouts without due dates, then paid payouts
+        // Sort overdue first, then due soon, then unsettled without dates, with settled records last.
         return [...result].sort((a, b) => {
+            const getPriority = (p: Payout) => {
+                if (p.payout_status === 'paid') return 4;
+                if (!p.due_date) return 3;
+                const now = new Date();
+                const due = new Date(p.due_date);
+                now.setHours(0, 0, 0, 0);
+                due.setHours(0, 0, 0, 0);
+                return due.getTime() < now.getTime() ? 0 : 1;
+            };
+            const priorityDiff = getPriority(a) - getPriority(b);
+            if (priorityDiff !== 0) return priorityDiff;
+
             const aIsActive = a.payout_status !== 'paid' && a.due_date !== null;
             const bIsActive = b.payout_status !== 'paid' && b.due_date !== null;
 
@@ -377,30 +404,24 @@ export default function AdminPayoutsPage() {
                         />
                     </div>
 
-                    {/* Filters */}
-                    <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-sm font-medium text-slate-500">Status:</span>
-                        <div className="flex rounded-2xl bg-slate-100 p-1">
-                            {[
-                                { val: 'all', label: 'All' },
-                                { val: 'pending', label: 'Pending' },
-                                { val: 'partially_paid', label: 'Partial' },
-                                { val: 'paid', label: 'Paid' },
-                                { val: 'overdue', label: 'Overdue' }
-                            ].map((status) => (
+                    <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        {payoutFilterBlocks.map((status) => {
+                            const Icon = status.icon;
+                            const active = statusFilter === status.val;
+                            return (
                                 <button
                                     key={status.val}
                                     onClick={() => setStatusFilter(status.val)}
-                                    className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider transition ${
-                                        statusFilter === status.val
-                                            ? 'bg-white text-slate-900 shadow-sm'
-                                            : 'text-slate-500 hover:text-slate-800'
-                                    }`}
+                                    className={`rounded-2xl border p-3 text-left transition ${status.tone} ${active ? 'ring-2 ring-slate-900/10 shadow-sm' : 'hover:shadow-sm'}`}
                                 >
-                                    {status.label}
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs font-bold uppercase tracking-wider">{status.label}</span>
+                                        <Icon className="h-4 w-4" />
+                                    </div>
+                                    <p className="mt-2 text-2xl font-extrabold">{status.count}</p>
                                 </button>
-                            ))}
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
 

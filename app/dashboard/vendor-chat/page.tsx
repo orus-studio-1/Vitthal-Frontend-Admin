@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, MessageSquare, Send } from 'lucide-react';
+import { Loader2, MessageSquare, Search, Send, X } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { adminAPI, extractApiError } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
@@ -23,6 +23,7 @@ export default function VendorChatPage() {
   const [messageBody, setMessageBody] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -130,6 +131,21 @@ export default function VendorChatPage() {
     [vendors, selectedVendorId]
   );
 
+  const filteredVendors = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return vendors;
+    return vendors.filter((item) =>
+      [
+        item.vendor.companyName,
+        item.vendor.name,
+        item.vendor.email,
+        item.vendor.phone,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    );
+  }, [vendors, searchQuery]);
+
   if (authLoading || !isAuthenticated) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-100"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>;
   }
@@ -149,12 +165,31 @@ export default function VendorChatPage() {
 
           {error ? <div className="mb-4 flex-shrink-0 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
+          <div className="relative mb-4 flex-shrink-0">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-11 py-3 text-sm text-slate-700 outline-none transition focus:border-[#1f4c45] focus:bg-white"
+              placeholder="Search name or phone"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+
           <div className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-3">
             {vendorsLoading ? (
               <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>
-            ) : vendors.length ? (
+            ) : filteredVendors.length ? (
               <div className="space-y-3">
-                {vendors.map((item) => {
+                {filteredVendors.map((item) => {
                   const isActive = item.vendorId === selectedVendorId;
                   return (
                     <button
@@ -178,7 +213,7 @@ export default function VendorChatPage() {
                 })}
               </div>
             ) : (
-              <p className="rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">No vendors found for chat.</p>
+              <p className="rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">{searchQuery ? 'No vendors matched your search.' : 'No vendors found for chat.'}</p>
             )}
           </div>
         </section>
