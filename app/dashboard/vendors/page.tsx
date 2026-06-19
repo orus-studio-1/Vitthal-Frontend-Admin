@@ -100,6 +100,7 @@ export default function VendorsPage() {
   const [blockingVendor, setBlockingVendor] = useState<Vendor | null>(null);
   const [unblockingVendor, setUnblockingVendor] = useState<Vendor | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [reconsiderationNotes, setReconsiderationNotes] = useState<Record<string, string>>({});
   const [activeReconsiderationVendorId, setActiveReconsiderationVendorId] = useState<string | null>(null);
 
@@ -295,6 +296,8 @@ export default function VendorsPage() {
         vendor.name?.toLowerCase().includes(query) ||
         vendor.company_name?.toLowerCase().includes(query) ||
         vendor.email?.toLowerCase().includes(query) ||
+        vendor.phone?.toLowerCase().includes(query) ||
+        vendor.alternative_number?.toLowerCase().includes(query) ||
         vendor.application_number?.toLowerCase().includes(query)
       );
     });
@@ -468,7 +471,40 @@ export default function VendorsPage() {
               <h2 className="text-xl font-semibold text-slate-900">Vendor list</h2>
               <p className="text-sm text-slate-500">Use View to inspect vendor analytics, or send a one-time agreement directly from the vendor card.</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className={`flex items-center justify-end transition-all ${isSearchOpen ? 'w-full sm:w-[360px]' : 'w-12'}`}>
+                {isSearchOpen ? (
+                  <div className="relative w-full">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      autoFocus
+                      className="form-input pl-11 pr-11"
+                      placeholder="Search name, company, email, mobile, application ID"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setIsSearchOpen(false);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsSearchOpen(true)}
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+                    aria-label="Open vendor search"
+                  >
+                    <Search className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => router.push('/dashboard/quotations')}
                 className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -477,19 +513,6 @@ export default function VendorsPage() {
                 Review quotations
               </button>
               <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{approvedVendors.length} vendors</div>
-            </div>
-          </div>
-
-          <div className="mb-5">
-            <label className="form-label">Search vendors</label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                className="form-input pl-11"
-                placeholder="Search by vendor name, company name, email, or application ID"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
             </div>
           </div>
 

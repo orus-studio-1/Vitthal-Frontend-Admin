@@ -7,7 +7,9 @@ import {
   Building2,
   Calendar,
   Clock,
+  Download,
   DollarSign,
+  FileText,
   Globe,
   Loader2,
   MapPin,
@@ -22,6 +24,7 @@ import DashboardLayout from '../../../components/dashboard-layout';
 import { adminAPI, extractApiError } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { AnalyticsData } from '../../../lib/types';
+import { downloadCsv, downloadPdfReportWithCharts, PdfChartCard } from '../../../lib/export-utils';
 
 import {
   Chart as ChartJS,
@@ -335,6 +338,115 @@ export default function AnalyticsPage() {
     return Math.max(...data.topCities.map(c => c.total_revenue), 1);
   }, [data]);
 
+  const analyticsSections = useMemo(() => {
+    if (!data) return [];
+    return [
+      {
+        heading: 'Summary',
+        headers: ['Metric', 'Value'],
+        rows: [
+          ['Period', data.period],
+          ['Total Revenue', kpis.revenue],
+          ['Total Orders', kpis.orders],
+          ['Average Order Value', Math.round(kpis.aov)],
+          ['Top Category', kpis.topCategory],
+          ['Peak Sales Day', peakSalesDay ? `${peakSalesDay.date} (${formatCurrency(peakSalesDay.revenue)}, ${peakSalesDay.count} orders)` : 'N/A'],
+        ],
+      },
+      {
+        heading: 'Orders Over Time',
+        headers: ['Date', 'Orders', 'Revenue'],
+        rows: data.ordersOverTime.map((item) => [item.date, item.count, item.revenue]),
+      },
+      {
+        heading: 'Top Products',
+        headers: ['Product', 'Orders', 'Revenue'],
+        rows: data.topProducts.map((item) => [item.product?.name || item.product_id, item._count.product_id, item._sum.total_amount || 0]),
+      },
+      {
+        heading: 'Top Vendors',
+        headers: ['Vendor', 'Orders', 'Revenue'],
+        rows: data.topVendors.map((item) => [item.vendor?.name || item.vendor_id, item._count.vendor_id, item._sum.total_amount || 0]),
+      },
+      {
+        heading: 'Top Customers',
+        headers: ['Customer', 'Email', 'Orders', 'Total Spent'],
+        rows: data.topCustomers.map((customer) => [customer.name, customer.email, customer.order_count, customer.total_spent]),
+      },
+      {
+        heading: 'Top Cities',
+        headers: ['City', 'Orders', 'Revenue'],
+        rows: data.topCities.map((city) => [city.city, city.order_count, city.total_revenue]),
+      },
+      {
+        heading: 'Purchase Hours',
+        headers: ['Hour', 'Orders', 'Revenue'],
+        rows: data.purchaseTimeOfDay.map((hour) => [`${hour.hour_of_day}:00`, hour.order_count, hour.total_revenue]),
+      },
+      {
+        heading: 'Category Distribution',
+        headers: ['Category', 'Orders', 'Quantity', 'Revenue'],
+        rows: data.categoryDistribution.map((category) => [category.category || 'Uncategorized', category.order_count, category.total_quantity, category.total_revenue]),
+      },
+      {
+        heading: 'Status Distribution',
+        headers: ['Status', 'Orders'],
+        rows: Object.entries(data.statusDistribution).map(([status, count]) => [status, count || 0]),
+      },
+    ];
+  }, [data, kpis, peakSalesDay]);
+
+  const handleDownloadCsv = () => {
+    if (!data) return;
+    const rows = analyticsSections.flatMap((section) => [
+      [section.heading],
+      section.headers || [],
+      ...section.rows,
+      [],
+    ]);
+    downloadCsv(`analytics-${period}-days.csv`, ['Analytics Export'], rows);
+  };
+
+  const handleDownloadPdf = () => {
+    if (!data) return;
+    const chartDefinitions = [
+      { id: 'revenue-growth', title: 'Revenue Growth Over Time', subtitle: 'Total invoice revenue trends.' },
+      { id: 'order-volume', title: 'Order Volume Over Time', subtitle: 'Daily processed orders volume.' },
+      { id: 'weekly-sales', title: 'Weekly Sales Distribution', subtitle: 'Total revenue aggregated by day of the week.' },
+      { id: 'category-share', title: 'Product Categories Share', subtitle: 'Revenue split across listed marketplace sectors.' },
+      { id: 'peak-hours', title: 'Peak Purchase Hours', subtitle: 'Hourly density of client order checkout requests.' },
+      { id: 'top-products', title: 'Top Products', subtitle: 'Best performing catalogue items by revenue.' },
+      { id: 'top-vendors', title: 'Top Vendors', subtitle: 'Highest grossing vendors on the platform.' },
+    ];
+
+    const chartCards = chartDefinitions.flatMap<PdfChartCard>((chart) => {
+      const canvas = document.querySelector<HTMLCanvasElement>(`[data-report-chart="${chart.id}"] canvas`);
+      if (!canvas || canvas.width === 0 || canvas.height === 0) return [];
+
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = canvas.width;
+      exportCanvas.height = canvas.height;
+      const context = exportCanvas.getContext('2d');
+      if (!context) return [];
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      context.drawImage(canvas, 0, 0);
+
+      return [{
+        title: chart.title,
+        subtitle: `${chart.subtitle} (${data.period})`,
+        imageDataUrl: exportCanvas.toDataURL('image/jpeg', 0.92),
+      }];
+    });
+
+    downloadPdfReportWithCharts(
+      `Analytics report - ${data.period}`,
+      chartCards,
+      analyticsSections,
+      `analytics-${period}-days.pdf`
+    );
+  };
+
   if (authLoading || !isAuthenticated) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-100"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>;
   }
@@ -347,19 +459,41 @@ export default function AnalyticsPage() {
             <h1 className="text-2xl font-bold text-slate-900">Visual Insights & Deep Analytics</h1>
             <p className="text-sm text-slate-500">Comprehensive overview of revenue trends, product/vendor performance, and buyer behaviors.</p>
           </div>
-          <div className="min-w-48">
-            <label className="form-label font-semibold text-xs uppercase tracking-wider text-slate-400">Timeframe</label>
-            <select
-              className="form-input mt-1.5"
-              value={period}
-              onChange={(event) => setPeriod(event.target.value)}
-            >
-              {periods.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-48">
+              <label className="form-label font-semibold text-xs uppercase tracking-wider text-slate-400">Timeframe</label>
+              <select
+                className="form-input mt-1.5"
+                value={period}
+                onChange={(event) => setPeriod(event.target.value)}
+              >
+                {periods.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={!data || loading}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FileText className="h-4 w-4" />
+                PDF
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadCsv}
+                disabled={!data || loading}
+                className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                CSV
+              </button>
+            </div>
           </div>
         </section>
 
@@ -430,7 +564,7 @@ export default function AnalyticsPage() {
             {/* Charts Section */}
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Line Chart: Revenue Trend */}
-              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <section data-report-chart="revenue-growth" className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-900">Revenue Growth Over Time</h2>
@@ -448,7 +582,7 @@ export default function AnalyticsPage() {
               </section>
 
               {/* Line Chart: Orders Volume Trend */}
-              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <section data-report-chart="order-volume" className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-900">Order Volume Over Time</h2>
@@ -466,7 +600,7 @@ export default function AnalyticsPage() {
               </section>
 
               {/* Bar Chart: Weekly Sales Distribution */}
-              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <section data-report-chart="weekly-sales" className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-900">Weekly Sales Distribution</h2>
@@ -484,7 +618,7 @@ export default function AnalyticsPage() {
               </section>
 
               {/* Doughnut: Category Share */}
-              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
+              <section data-report-chart="category-share" className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
                 <div className="mb-4">
                   <h2 className="text-lg font-bold text-slate-900">Product Categories Share</h2>
                   <p className="text-xs text-slate-400">Revenue split across listed marketplace sectors.</p>
@@ -499,7 +633,7 @@ export default function AnalyticsPage() {
               </section>
 
               {/* Bar: Hourly trend */}
-              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
+              <section data-report-chart="peak-hours" className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
                 <div className="mb-4">
                   <h2 className="text-lg font-bold text-slate-900">Peak Purchase Hours</h2>
                   <p className="text-xs text-slate-400">Hourly density of client order checkout requests.</p>
@@ -514,7 +648,7 @@ export default function AnalyticsPage() {
               </section>
 
               {/* Bar: Top Products */}
-              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <section data-report-chart="top-products" className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-900">Top Products</h2>
@@ -532,7 +666,7 @@ export default function AnalyticsPage() {
               </section>
 
               {/* Bar: Top Vendors */}
-              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <section data-report-chart="top-vendors" className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-900">Top Vendors</h2>

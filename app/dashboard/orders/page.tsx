@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Search, ShoppingBag, ShoppingCart, X } from 'lucide-react';
+import { Download, Loader2, MapPin, Package, Search, ShoppingBag, ShoppingCart, X } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, orderAPI, productAPI, quotationAPI, vendorAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { CreateVendorQuotationPayload, Order, OrderFormData, OrderProductVendorOption, OrderStatus, Product, Vendor } from '../../../lib/types';
+import { downloadCsv } from '../../../lib/export-utils';
 
 const orderStatuses: OrderStatus[] = [
   'pending',
@@ -47,6 +48,10 @@ export default function OrdersPage() {
   const [error, setError] = useState('');
   const [vendorOptionsLoading, setVendorOptionsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'buy' | 'orders'>('orders');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [orderDetail, setOrderDetail] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
 
   async function loadData() {
     try {
@@ -81,6 +86,15 @@ export default function OrdersPage() {
       return () => window.clearTimeout(timer);
     }
   }, [authLoading, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const orderId = new URLSearchParams(window.location.search).get('orderId');
+    if (orderId && isAuthenticated) {
+      setActiveTab('orders');
+      void openOrderDetail(orderId);
+    }
+  }, [isAuthenticated]);
 
   const filteredProducts = useMemo(() => {
     const query = productSearch.trim().toLowerCase();
@@ -223,6 +237,51 @@ export default function OrdersPage() {
     }
   };
 
+  const openOrderDetail = async (orderId: string) => {
+    try {
+      setSelectedOrderId(orderId);
+      setDetailLoading(true);
+      setDetailError('');
+      setOrderDetail(null);
+      const response = await orderAPI.getById(orderId);
+      setOrderDetail(response.data.data);
+    } catch (detailLoadError) {
+      setDetailError(extractApiError(detailLoadError, 'Failed to load order details'));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeOrderDetail = () => {
+    setSelectedOrderId(null);
+    setOrderDetail(null);
+    setDetailError('');
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('orderId')) {
+      router.replace('/dashboard/orders');
+    }
+  };
+
+  const handleDownloadOrdersCsv = () => {
+    downloadCsv(
+      'orders.csv',
+      ['Order ID', 'Customer', 'Email', 'Phone', 'Product', 'Vendor', 'Quantity', 'Amount', 'Status', 'Source', 'Address', 'Created At'],
+      orders.map((order) => [
+        order.id,
+        order.customer_name,
+        order.customer_email,
+        order.customer_phone || '',
+        order.product_name || '',
+        order.vendor_name || '',
+        order.quantity,
+        order.total_amount,
+        order.status,
+        order.source,
+        order.delivery_address || '',
+        order.created_at,
+      ])
+    );
+  };
+
   if (authLoading || !isAuthenticated) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-100"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>;
   }
@@ -341,7 +400,18 @@ export default function OrdersPage() {
               <h2 className="text-xl font-semibold text-slate-900">Orders</h2>
               <p className="text-sm text-slate-500">Client checkout orders, admin orders, and vendor orders all show here.</p>
             </div>
-            <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{orders.length} orders</div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadOrdersCsv}
+                disabled={!orders.length}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                CSV
+              </button>
+              <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{orders.length} orders</div>
+            </div>
           </div>
 
           {loading ? (
@@ -349,7 +419,7 @@ export default function OrdersPage() {
           ) : (
             <div className="space-y-4">
               {orders.length ? orders.map((order) => (
-                <article key={order.id} className="rounded-2xl border border-slate-200 p-5 hover:border-slate-300 transition-colors">
+                <article key={order.id} onClick={() => void openOrderDetail(order.id)} className="cursor-pointer rounded-2xl border border-slate-200 p-5 transition-colors hover:border-blue-300 hover:bg-blue-50/20">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
@@ -373,7 +443,7 @@ export default function OrdersPage() {
                     </div>
                     <div className="min-w-[240px] border-t border-slate-100 pt-4 lg:border-t-0 lg:pt-0">
                       <label className="form-label">Status</label>
-                      <select className="form-input" value={order.status} onChange={(event) => handleStatusUpdate(order.id, event.target.value as OrderStatus)}>
+                      <select className="form-input" value={order.status} onClick={(event) => event.stopPropagation()} onChange={(event) => handleStatusUpdate(order.id, event.target.value as OrderStatus)}>
                         {orderStatuses.map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
                       </select>
                     </div>
@@ -490,6 +560,104 @@ export default function OrdersPage() {
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedOrderId ? (
+        <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
+          <button className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" onClick={closeOrderDetail} aria-label="Close order details" />
+          <div className="absolute inset-y-0 right-0 flex max-w-full pl-6">
+            <div className="flex h-full w-screen max-w-3xl flex-col bg-white shadow-2xl">
+              <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+                <div>
+                  <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-blue-600">Order detail</p>
+                  <h2 className="mt-2 text-xl font-semibold text-slate-900">#{selectedOrderId.slice(0, 8)}</h2>
+                </div>
+                <button onClick={closeOrderDetail} className="rounded-2xl border border-slate-200 p-3 text-slate-500 hover:bg-slate-50">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {detailLoading ? (
+                  <div className="flex h-full min-h-[360px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>
+                ) : detailError ? (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{detailError}</div>
+                ) : orderDetail ? (
+                  <div className="space-y-6">
+                    <section className="grid gap-4 md:grid-cols-3">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p>
+                        <p className="mt-2 text-lg font-bold capitalize text-slate-900">{orderDetail.status?.replaceAll('_', ' ')}</p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Payment</p>
+                        <p className="mt-2 text-lg font-bold capitalize text-slate-900">{orderDetail.payment_status || 'pending'}</p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Amount</p>
+                        <p className="mt-2 text-lg font-bold text-emerald-700">₹{Number(orderDetail.total_amount || 0).toLocaleString('en-IN')}</p>
+                      </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-slate-200 p-5">
+                      <h3 className="font-semibold text-slate-900">Customer and delivery</h3>
+                      <div className="mt-4 grid gap-4 text-sm md:grid-cols-2">
+                        <div className="space-y-1 text-slate-600">
+                          <p className="font-medium text-slate-900">{orderDetail.customer_name}</p>
+                          <p>{orderDetail.customer_email}</p>
+                          <p>{orderDetail.customer_phone || 'No phone'}</p>
+                        </div>
+                        <div className="flex gap-2 text-slate-600">
+                          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                          <p>{orderDetail.address_line}, {orderDetail.city}, {orderDetail.state}, {orderDetail.country} - {orderDetail.pincode}</p>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-slate-200 p-5">
+                      <h3 className="font-semibold text-slate-900">Items</h3>
+                      <div className="mt-4 divide-y divide-slate-100">
+                        {(orderDetail.items || []).map((item: any, index: number) => (
+                          <div key={`${item.product_id}-${index}`} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
+                            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
+                              {item.image_url ? <img src={item.image_url} alt={item.product_name} className="h-full w-full object-cover" /> : <Package className="h-6 w-6 text-slate-300" />}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-semibold text-slate-900">{item.product_name}</p>
+                              <p className="text-sm text-slate-500">Qty {item.quantity} • ₹{Number(item.price || 0).toLocaleString('en-IN')} each</p>
+                            </div>
+                            <p className="font-semibold text-slate-900">₹{Number((item.price || 0) * (item.quantity || 0)).toLocaleString('en-IN')}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-slate-200 p-5">
+                      <h3 className="font-semibold text-slate-900">Tracking timeline</h3>
+                      <div className="mt-5 border-l border-slate-200 pl-5">
+                        {([...(orderDetail.fulfillment_tracking || []), ...(orderDetail.status_history || [])].length
+                          ? [...(orderDetail.fulfillment_tracking || []), ...(orderDetail.status_history || [])]
+                              .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                              .map((history: any, index: number) => (
+                                <div key={history.id || index} className="relative pb-6 last:pb-0">
+                                  <span className="absolute -left-[29px] top-1 h-3 w-3 rounded-full bg-blue-700 ring-4 ring-blue-50" />
+                                  <p className="font-semibold capitalize text-slate-900">{String(history.status).replaceAll('_', ' ')}</p>
+                                  <p className="mt-1 text-sm text-slate-500">{history.note || 'Status updated.'}</p>
+                                  {history.fulfillment_center || history.city ? (
+                                    <p className="mt-1 text-xs text-slate-400">{[history.fulfillment_center, history.city, history.state, history.country].filter(Boolean).join(', ')}</p>
+                                  ) : null}
+                                  <p className="mt-1 text-xs text-slate-400">{new Date(history.created_at).toLocaleString('en-IN')}</p>
+                                </div>
+                              ))
+                          : <p className="text-sm text-slate-500">No tracking events recorded yet.</p>)}
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
