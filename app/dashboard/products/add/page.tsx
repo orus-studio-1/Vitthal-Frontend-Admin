@@ -88,9 +88,13 @@ export default function AddProductPage() {
 
   // Variant States
   const [hasMultipleVariants, setHasMultipleVariants] = useState<boolean>(false);
-  const [variantType, setVariantType] = useState<string>("Size");
-  const [creationVariants, setCreationVariants] = useState<Array<{ id: string; value: string; sku: string }>>([
-    { id: "v-1", value: "", sku: "" },
+  const [creationVariants, setCreationVariants] = useState<Array<{
+    id: string;
+    name: string;
+    properties: Array<{ id: string; key: string; value: string }>;
+    sku: string;
+  }>>([
+    { id: "v-1", name: "", properties: [{ id: "prop-1", key: "", value: "" }], sku: "" },
   ]);
 
   // Images states
@@ -210,6 +214,64 @@ export default function AddProductPage() {
     );
   };
 
+  // Helper to add property row on variant
+  const addVariantPropertyRow = (variantId: string) => {
+    setCreationVariants((prev) =>
+      prev.map((v) =>
+        v.id === variantId
+          ? {
+              ...v,
+              properties: [
+                ...v.properties,
+                {
+                  id: `prop-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  key: "",
+                  value: "",
+                },
+              ],
+            }
+          : v
+      )
+    );
+  };
+
+  // Helper to remove property row on variant
+  const removeVariantPropertyRow = (variantId: string, propId: string) => {
+    setCreationVariants((prev) =>
+      prev.map((v) =>
+        v.id === variantId
+          ? {
+              ...v,
+              properties: v.properties.length <= 1
+                ? [{ id: `prop-${Date.now()}-${Math.random().toString(36).slice(2)}`, key: "", value: "" }]
+                : v.properties.filter((p) => p.id !== propId),
+            }
+          : v
+      )
+    );
+  };
+
+  // Helper to update property on variant
+  const updateVariantProperty = (
+    variantId: string,
+    propId: string,
+    field: "key" | "value",
+    val: string
+  ) => {
+    setCreationVariants((prev) =>
+      prev.map((v) =>
+        v.id === variantId
+          ? {
+              ...v,
+              properties: v.properties.map((p) =>
+                p.id === propId ? { ...p, [field]: val } : p
+              ),
+            }
+          : v
+      )
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -267,16 +329,32 @@ export default function AddProductPage() {
 
       // 1b. Create product variants if configured
       if (hasMultipleVariants) {
-        const activeVariants = creationVariants.filter(v => v.value.trim().length > 0);
+        const activeVariants = creationVariants.filter((v) => {
+          const hasProps = v.properties.some((p) => p.key.trim() && p.value.trim());
+          return v.name.trim().length > 0 || hasProps;
+        });
+
         if (activeVariants.length === 0) {
           throw new Error("Please configure at least one variation option value when variations are enabled.");
         }
+
         for (const variant of activeVariants) {
-          const propObj = { [variantType]: variant.value.trim() };
+          const propsObj: Record<string, string> = {};
+          variant.properties.forEach((p) => {
+            if (p.key.trim() && p.value.trim()) {
+              propsObj[p.key.trim()] = p.value.trim();
+            }
+          });
+
+          const propDesc = Object.entries(propsObj)
+            .map(([key, val]) => `${key}: ${val}`)
+            .join(', ');
+
           await productAPI.addProductVariant({
             productId: finalProductId,
             sku: variant.sku.trim() || null,
-            properties: propObj,
+            name: variant.name.trim() || propDesc || "Standard Variant",
+            properties: propsObj,
           });
         }
       }
@@ -623,64 +701,98 @@ export default function AddProductPage() {
               >
                 {hasMultipleVariants ? "Disable Variations" : "Enable Variations"}
               </button>
-            </div>
-
-            {hasMultipleVariants && (
+            </div>            {hasMultipleVariants && (
               <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200 animate-in fade-in slide-in-from-top-2 duration-250">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                      Variation Type / Dimension Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={variantType}
-                      onChange={(e) => setVariantType(e.target.value)}
-                      placeholder="e.g. Size, Grade, Color"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
-                    />
-                  </div>
-                </div>
-
                 <div className="space-y-3 pt-2">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Configure Variant Options (E.g. Option: 10mm, SKU: BB-10MM) *
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Configure Variant Options (E.g. Display Name: Small, Attributes: Size: 10mm) *
                   </label>
                   {creationVariants.map((variant, index) => (
-                    <div key={variant.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1.2fr_auto] gap-3 items-center">
-                      <input
-                        type="text"
-                        value={variant.value}
-                        onChange={(e) => {
-                          const updated = [...creationVariants];
-                          updated[index].value = e.target.value;
-                          setCreationVariants(updated);
-                        }}
-                        placeholder="Option value (e.g., 10mm)"
-                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
-                      />
-                      <input
-                        type="text"
-                        value={variant.sku}
-                        onChange={(e) => {
-                          const updated = [...creationVariants];
-                          updated[index].sku = e.target.value;
-                          setCreationVariants(updated);
-                        }}
-                        placeholder="SKU / Item Code (Optional)"
-                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCreationVariants(
-                            creationVariants.filter((v) => v.id !== variant.id)
-                          );
-                        }}
-                        className="p-2 border border-slate-200 rounded-xl bg-white text-slate-400 hover:bg-red-50 hover:text-red-650 transition"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div key={variant.id} className="border border-slate-200 rounded-2xl p-4 bg-white space-y-4 shadow-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1.5fr_auto] gap-3 items-start">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Variant Display Name</label>
+                          <input
+                            type="text"
+                            value={variant.name}
+                            onChange={(e) => {
+                              const updated = [...creationVariants];
+                              updated[index].name = e.target.value;
+                              setCreationVariants(updated);
+                            }}
+                            placeholder="Variant Name (e.g., Small)"
+                            className="px-3.5 py-2 border border-slate-200 bg-slate-50/50 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-full font-semibold text-slate-850"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">SKU / Item Code (Optional)</label>
+                          <input
+                            type="text"
+                            value={variant.sku}
+                            onChange={(e) => {
+                              const updated = [...creationVariants];
+                              updated[index].sku = e.target.value;
+                              setCreationVariants(updated);
+                            }}
+                            placeholder="SKU / Item Code"
+                            className="px-3.5 py-2 border border-slate-200 bg-slate-50/50 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-full font-mono text-slate-750"
+                          />
+                        </div>
+                        <div className="self-end pb-1 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCreationVariants(
+                                creationVariants.filter((v) => v.id !== variant.id)
+                              );
+                            }}
+                            className="p-2 border border-slate-200 rounded-xl bg-white text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                            title="Delete variant row"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Structured properties matrix builder inside variant card */}
+                      <div className="border border-slate-200 bg-slate-50/50 rounded-xl p-3.5 space-y-2">
+                        <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wide">
+                          Variant Attributes (Specifications)
+                        </span>
+                        {variant.properties.map((prop, propIdx) => (
+                          <div key={prop.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                            <input
+                              type="text"
+                              value={prop.key}
+                              onChange={(e) => updateVariantProperty(variant.id, prop.id, "key", e.target.value)}
+                              placeholder="Attribute (e.g. Size)"
+                              className="px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold text-slate-850 w-full"
+                            />
+                            <input
+                              type="text"
+                              value={prop.value}
+                              onChange={(e) => updateVariantProperty(variant.id, prop.id, "value", e.target.value)}
+                              placeholder="Value (e.g. 10mm)"
+                              className="px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold text-slate-850 w-full"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeVariantPropertyRow(variant.id, prop.id)}
+                              className="p-2 border border-slate-200 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                              title="Remove attribute"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => addVariantPropertyRow(variant.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-blue-300 text-blue-700 hover:text-blue-900 rounded-lg text-xs font-bold transition-all bg-white"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Add Attribute Row
+                        </button>
+                      </div>
                     </div>
                   ))}
 
@@ -689,7 +801,12 @@ export default function AddProductPage() {
                     onClick={() => {
                       setCreationVariants([
                         ...creationVariants,
-                        { id: `v-${Date.now()}-${Math.random().toString(36).slice(2)}`, value: "", sku: "" },
+                        {
+                          id: `v-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                          name: "",
+                          sku: "",
+                          properties: [{ id: `prop-${Date.now()}-${Math.random().toString(36).slice(2)}`, key: "", value: "" }],
+                        },
                       ]);
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-slate-350 hover:border-blue-500 hover:text-blue-600 rounded-lg text-xs font-semibold text-slate-600 transition bg-white"
