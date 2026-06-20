@@ -298,6 +298,7 @@ export interface DashboardStats {
   };
   orderStats: Partial<Record<OrderStatus, number>>;
   recentOrders: Order[];
+  orderDetails?: Order[];
   monthlyRevenue: number;
 }
 

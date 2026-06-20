@@ -37,6 +37,28 @@ export function downloadCsv(filename: string, headers: string[], rows: CsvCell[]
   URL.revokeObjectURL(url);
 }
 
+export function downloadExcel(filename: string, sheetName: string, headers: string[], rows: CsvCell[][]) {
+  const tableRows = [headers, ...rows]
+    .map((row) => `<tr>${row.map((cell) => `<td>${htmlEscape(cell)}</td>`).join('')}</tr>`)
+    .join('');
+  const workbook = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="utf-8" /></head>
+      <body><table>${tableRows}</table></body>
+    </html>
+  `;
+  const blob = new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename.endsWith('.xls') ? filename : `${filename}.xls`;
+  anchor.dataset.downloadurl = ['application/vnd.ms-excel', anchor.download, anchor.href].join(':');
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 function pdfEscape(value: CsvCell) {
   return (value === null || value === undefined ? '' : String(value))
     .replace(/[₹–—]/g, (match) => (match === '₹' ? 'INR ' : '-'))

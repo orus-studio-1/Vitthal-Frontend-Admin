@@ -36,6 +36,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [chartDetail, setChartDetail] = useState<{ title: string; description: string; orders: DashboardStats['recentOrders'] } | null>(null);
 
   async function fetchDashboardStats() {
     try {
@@ -185,6 +186,41 @@ export default function DashboardPage() {
     router.push(`/dashboard/orders?orderId=${orderId}`);
   };
 
+  const detailOrders = stats?.orderDetails?.length ? stats.orderDetails : stats?.recentOrders || [];
+
+  const showRecentOrderDetail = (index: number) => {
+    const order = stats?.recentOrders[index];
+    if (!order) return;
+    setChartDetail({
+      title: `Order by ${order.customer_name || 'Customer'}`,
+      description: `${order.product_name || 'Unknown product'} supplied by ${order.vendor_name || 'Unknown vendor'}`,
+      orders: [order],
+    });
+  };
+
+  const showStatusDetail = (index: number) => {
+    const status = Object.keys(stats?.orderStats || {})[index];
+    if (!status) return;
+    const orders = detailOrders.filter((order) => order.status === status);
+    setChartDetail({
+      title: `${status.replaceAll('_', ' ')} orders`,
+      description: orders.length ? 'Recent matching orders from the dashboard feed.' : 'No recent orders in this status are present in the dashboard feed.',
+      orders,
+    });
+  };
+
+  const showSourceDetail = (index: number) => {
+    const source = sourceChartData.labels[index];
+    if (!source) return;
+    const normalizedSource = String(source).replaceAll(' ', '_');
+    const orders = detailOrders.filter((order) => (order.source || 'unknown') === normalizedSource);
+    setChartDetail({
+      title: `${String(source)} orders`,
+      description: orders.length ? 'Recent matching orders from the dashboard feed.' : 'No recent orders from this source are present in the dashboard feed.',
+      orders,
+    });
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -254,7 +290,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="min-h-[260px]">
                   {stats?.recentOrders.length ? (
-                    <Bar data={recentOrderBarData} options={{ responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }} />
+                    <Bar data={recentOrderBarData} options={{ responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } }, onClick: (_event, elements) => { if (elements[0]) showRecentOrderDetail(elements[0].index); } }} />
                   ) : (
                     <div className="flex min-h-[260px] items-center justify-center text-sm text-slate-500">No recent order values available.</div>
                   )}
@@ -268,7 +304,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="mx-auto max-w-[300px]">
                   {Object.entries(stats?.orderStats || {}).length ? (
-                    <Doughnut data={statusChartData} options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }} />
+                    <Doughnut data={statusChartData} options={{ responsive: true, plugins: { legend: { position: 'bottom' } }, onClick: (_event, elements) => { if (elements[0]) showStatusDetail(elements[0].index); } }} />
                   ) : (
                     <div className="flex min-h-[260px] items-center justify-center text-sm text-slate-500">No status distribution available.</div>
                   )}
@@ -282,13 +318,42 @@ export default function DashboardPage() {
                 </div>
                 <div className="mx-auto max-w-[300px]">
                   {stats?.recentOrders.length ? (
-                    <Doughnut data={sourceChartData} options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }} />
+                    <Doughnut data={sourceChartData} options={{ responsive: true, plugins: { legend: { position: 'bottom' } }, onClick: (_event, elements) => { if (elements[0]) showSourceDetail(elements[0].index); } }} />
                   ) : (
                     <div className="flex min-h-[260px] items-center justify-center text-sm text-slate-500">No source mix available.</div>
                   )}
                 </div>
               </article>
             </section>
+
+            {chartDetail ? (
+              <section className="rounded-[1.6rem] border border-blue-200 bg-blue-50/70 p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-blue-700">Chart details</p>
+                    <h2 className="mt-2 text-lg font-semibold capitalize text-slate-900">{chartDetail.title}</h2>
+                    <p className="mt-1 text-sm text-slate-600">{chartDetail.description}</p>
+                  </div>
+                  <button type="button" onClick={() => setChartDetail(null)} className="rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Close</button>
+                </div>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {chartDetail.orders.length ? chartDetail.orders.map((order) => (
+                    <button key={order.id} type="button" onClick={() => openOrderDetail(order.id)} className="rounded-[1.25rem] border border-blue-100 bg-white p-4 text-left transition hover:border-blue-400">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">{order.customer_name || 'Unknown customer'}</p>
+                          <p className="mt-1 text-sm text-slate-500">{order.product_name || 'Unknown product'} with {order.vendor_name || 'Unknown vendor'}</p>
+                        </div>
+                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(order.status)}`}>{order.status.replaceAll('_', ' ')}</span>
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-slate-900">₹{Number(order.total_amount || 0).toLocaleString('en-IN')}</p>
+                    </button>
+                  )) : (
+                    <p className="rounded-2xl bg-white px-4 py-5 text-sm text-slate-500">No matching recent orders available in this dashboard snapshot.</p>
+                  )}
+                </div>
+              </section>
+            ) : null}
 
             <section className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
               <article className="h-full rounded-[1.6rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)] backdrop-blur-sm">
