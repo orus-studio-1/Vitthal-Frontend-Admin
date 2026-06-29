@@ -262,6 +262,21 @@ export default function VendorInsightsModal({
                       </div>
                     </div>
 
+                    <div className="border-t border-slate-100 pt-4">
+                      <p className="text-xs text-slate-400">Vendor Signature</p>
+                      {data.vendor.vendor_signature_image_link ? (
+                        <div className="mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                          <img
+                            src={data.vendor.vendor_signature_image_link}
+                            alt="Vendor signature"
+                            className="h-28 w-full object-contain bg-white"
+                          />
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-sm font-semibold text-red-600">Not uploaded</p>
+                      )}
+                    </div>
+
                     <div className="border-t border-slate-100 pt-3">
                       <div className="flex items-center gap-2 mb-2 text-slate-700 font-medium text-xs">
                         <Percent className="h-4 w-4 text-slate-400" />
