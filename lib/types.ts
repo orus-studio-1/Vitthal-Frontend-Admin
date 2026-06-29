@@ -3,7 +3,7 @@ export interface ApiResponse<T = unknown> {
   data: T;
 }
 
-export type UserRole = 'client' | 'vendor' | 'admin' | 'super_admin';
+export type UserRole = 'client' | 'vendor' | 'admin' | 'super_admin' | 'fulfillment_center';
 export type ProductCategory = 'Plastic' | 'Metal';
 export type ApprovalStatus = 'pending' | 'agreement_sent' | 'approved' | 'rejected' | 'reconsideration';
 
@@ -506,4 +506,29 @@ export interface AdminVendorChatConversation {
     limit: number;
     total: number;
   };
+}
+
+export interface FulfillmentCenter {
+  id: string;
+  user_id: string;
+  name: string;
+  code: string;
+  email: string;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  manager_name?: string | null;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  pincode: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  total_area_sqft?: number | null;
+  capacity_packages?: number | null;
+  storage_type?: string | null;
+  operating_hours?: string | null;
+  status: 'active' | 'inactive' | 'maintenance';
+  created_at: string;
+  updated_at: string;
 }

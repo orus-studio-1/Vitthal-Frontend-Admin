@@ -295,4 +295,21 @@ export const clientQuotationAPI = {
     api.post<ApiResponse<any>>(`/api/client-quotations/${id}/confirm`, { message }),
 };
 
+export const fulfillmentCenterAPI = {
+  getAll: () =>
+    api.get<ApiResponse<any[]>>('/api/admin/fulfillment-centers'),
+
+  getById: (id: string) =>
+    api.get<ApiResponse<any>>(`/api/admin/fulfillment-centers/${id}`),
+
+  create: (data: any) =>
+    api.post<ApiResponse<any>>('/api/admin/fulfillment-centers', data),
+
+  update: (id: string, data: any) =>
+    api.put<ApiResponse<any>>(`/api/admin/fulfillment-centers/${id}`, data),
+
+  delete: (id: string) =>
+    api.delete<{ message: string }>(`/api/admin/fulfillment-centers/${id}`),
+};
+
 export default api;
