@@ -19,7 +19,9 @@ import {
   Calendar,
   Layers,
   Percent,
-  TrendingUp
+  TrendingUp,
+  Upload,
+  ImageIcon
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, productAPI } from '../../../lib/api';
@@ -58,6 +60,8 @@ export default function CategoriesPage() {
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState('');
   const [minCommision, setMinCommision] = useState(0);
   const [maxCommision, setMaxCommision] = useState(10);
   const [sortOrder, setSortOrder] = useState(0);
@@ -65,6 +69,41 @@ export default function CategoriesPage() {
 
   // Submit loading
   const [submitting, setSubmitting] = useState(false);
+
+  const buildCategoryFormData = () => {
+    const formData = new FormData();
+    formData.append('code', code.trim());
+    formData.append('label', label.trim());
+    formData.append('description', description.trim());
+    formData.append('min_commision_percentage', String(Number(minCommision)));
+    formData.append('max_commision_percentage', String(Number(maxCommision)));
+    formData.append('sort_order', String(Number(sortOrder)));
+    formData.append('is_active', String(isActive));
+    if (imageFile) {
+      formData.append('image', imageFile);
+    }
+    return formData;
+  };
+
+  const handleImageSelect = (file?: File) => {
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Please select a JPG, PNG, or WEBP image.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Category image must be 5MB or smaller.');
+      return;
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setImage('');
+    setError('');
+  };
 
   async function fetchCategories() {
     try {
@@ -98,6 +137,8 @@ export default function CategoriesPage() {
     setLabel('');
     setDescription('');
     setImage('');
+    setImageFile(null);
+    setImagePreview('');
     setMinCommision(0);
     setMaxCommision(10);
     setSortOrder(0);
@@ -114,6 +155,8 @@ export default function CategoriesPage() {
     setLabel(category.label);
     setDescription(category.description || '');
     setImage(category.image);
+    setImageFile(null);
+    setImagePreview(category.image);
     setMinCommision(category.min_commision_percentage);
     setMaxCommision(category.max_commision_percentage);
     setSortOrder(category.sort_order);
@@ -126,8 +169,8 @@ export default function CategoriesPage() {
   // Create category
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code || !label || !image) {
-      setError('Code, label and image URL are required.');
+    if (!code || !label || !imageFile) {
+      setError('Code, label and category image are required.');
       return;
     }
 
@@ -135,16 +178,7 @@ export default function CategoriesPage() {
       setSubmitting(true);
       setError('');
       setSuccess('');
-      await productAPI.createCategory({
-        code,
-        label,
-        description: description || undefined,
-        image,
-        min_commision_percentage: Number(minCommision),
-        max_commision_percentage: Number(maxCommision),
-        sort_order: Number(sortOrder),
-        is_active: isActive,
-      });
+      await productAPI.createCategory(buildCategoryFormData());
 
       setSuccess(`Category "${label}" added successfully!`);
       setIsAddOpen(false);
@@ -161,8 +195,8 @@ export default function CategoriesPage() {
     e.preventDefault();
     if (!selectedCategory) return;
 
-    if (!code || !label || !image) {
-      setError('Code, label and image URL are required.');
+    if (!code || !label || (!imageFile && !image)) {
+      setError('Code, label and category image are required.');
       return;
     }
 
@@ -170,16 +204,7 @@ export default function CategoriesPage() {
       setSubmitting(true);
       setError('');
       setSuccess('');
-      await productAPI.updateCategory(selectedCategory.id, {
-        code,
-        label,
-        description: description || null,
-        image,
-        min_commision_percentage: Number(minCommision),
-        max_commision_percentage: Number(maxCommision),
-        sort_order: Number(sortOrder),
-        is_active: isActive,
-      });
+      await productAPI.updateCategory(selectedCategory.id, buildCategoryFormData());
 
       setSuccess(`Category "${label}" updated successfully!`);
       setIsEditOpen(false);
@@ -271,7 +296,7 @@ export default function CategoriesPage() {
             </div>
             <button
               onClick={handleOpenAdd}
-              className="flex items-center gap-2 self-start sm:self-center px-4 py-2.5 rounded-xl bg-blue-750 hover:bg-blue-800 text-white text-sm font-bold shadow-md hover:shadow-lg transition-all duration-200"
+              className="flex items-center gap-2 self-start sm:self-center px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold shadow-md hover:shadow-lg transition-all duration-200"
             >
               <Plus className="h-4 w-4" />
               Add Category
@@ -481,21 +506,48 @@ export default function CategoriesPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Image URL
+                    Category Image
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={image}
-                    onChange={(e) => setImage(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                  />
-                  {image && (
-                    <div className="mt-2 h-20 w-32 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                      <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                  <label className="group flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center transition hover:border-blue-300 hover:bg-blue-50/40">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/jpg,image/webp"
+                      className="hidden"
+                      onChange={(e) => handleImageSelect(e.target.files?.[0])}
+                    />
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm ring-1 ring-slate-200 transition group-hover:ring-blue-200">
+                      <Upload className="h-5 w-5" />
+                    </span>
+                    <span className="mt-3 text-sm font-bold text-slate-800">
+                      {imagePreview ? 'Replace category image' : 'Upload category image'}
+                    </span>
+                    <span className="mt-1 text-xs text-slate-500">JPG, PNG or WEBP. Max 5MB.</span>
+                  </label>
+                  {imagePreview ? (
+                    <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                      <div className="h-36 w-full bg-slate-100">
+                        <img src={imagePreview} alt="Category preview" className="h-full w-full object-cover" />
+                      </div>
+                      <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-slate-500">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <ImageIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{imageFile?.name || 'Current category image'}</span>
+                        </span>
+                        {imageFile ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImageFile(null);
+                              setImagePreview(image || '');
+                            }}
+                            className="font-semibold text-slate-600 hover:text-red-600"
+                          >
+                            Undo
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -570,7 +622,7 @@ export default function CategoriesPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2.5 bg-blue-750 text-white rounded-xl hover:bg-blue-800 transition text-sm font-semibold flex items-center gap-1.5 shadow-md"
+                  className="px-5 py-2.5 bg-blue-700 text-white rounded-xl hover:bg-blue-800 transition text-sm font-semibold flex items-center gap-1.5 shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Save className="h-4 w-4" />
                   {isAddOpen ? 'Create Category' : 'Save Changes'}

@@ -114,7 +114,7 @@ export const productAPI = {
 
   getCategories: () => api.get<ApiResponse<any[]>>('/api/products/getCategories'),
 
-  createCategory: (data: {
+  createCategory: (data: FormData | {
     code: string;
     label: string;
     description?: string;
@@ -123,11 +123,15 @@ export const productAPI = {
     max_commision_percentage: number;
     sort_order: number;
     is_active: boolean;
-  }) => api.post<ApiResponse<any>>('/api/products/categories/add', data),
+  }) => api.post<ApiResponse<any>>('/api/products/categories/add', data, data instanceof FormData ? {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  } : undefined),
 
   updateCategory: (
     id: string,
-    data: Partial<{
+    data: FormData | Partial<{
       code: string;
       label: string;
       description: string | null;
@@ -137,7 +141,11 @@ export const productAPI = {
       sort_order: number;
       is_active: boolean;
     }>
-  ) => api.put<ApiResponse<any>>(`/api/products/categories/${id}`, data),
+  ) => api.put<ApiResponse<any>>(`/api/products/categories/${id}`, data, data instanceof FormData ? {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  } : undefined),
 
   deleteCategory: (id: string) => api.delete<{ message: string }>(`/api/products/categories/${id}`),
 

@@ -64,7 +64,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-[var(--sidebar-border)] bg-[linear-gradient(180deg,#1f2d2d,#172222)] text-[var(--sidebar-foreground)] shadow-2xl transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <div className="flex items-center justify-between border-b border-[var(--sidebar-border)] px-6 py-5">
+        <div className="shrink-0 flex items-center justify-between border-b border-[var(--sidebar-border)] px-6 py-5">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.42em] text-[#ccb27a]">MTWO</p>
             <h1 className="mt-2 text-xl font-semibold">Control Room</h1>
@@ -75,7 +75,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-2 px-4 py-6">
+        <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-6">
           {navigation.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -96,7 +96,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           })}
         </nav>
 
-        <div className="border-t border-[var(--sidebar-border)] px-6 py-5">
+        <div className="shrink-0 border-t border-[var(--sidebar-border)] px-6 py-5">
           <p className="text-sm font-medium">{user?.name || 'Admin User'}</p>
           <p className="text-xs text-[#ccbfa8]">{user?.email || 'No active session'}</p>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.3em] text-[#ccb27a]">{user?.role || 'guest'}</p>
