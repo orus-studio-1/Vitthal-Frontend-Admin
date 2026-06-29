@@ -7,7 +7,7 @@ import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, orderAPI, productAPI, quotationAPI, vendorAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { CreateVendorQuotationPayload, Order, OrderFormData, OrderProductVendorOption, OrderStatus, Product, Vendor } from '../../../lib/types';
-import { downloadCsv } from '../../../lib/export-utils';
+import { downloadCsv, downloadExcel } from '../../../lib/export-utils';
 
 const orderStatuses: OrderStatus[] = [
   'pending',
@@ -262,8 +262,32 @@ export default function OrdersPage() {
   };
 
   const handleDownloadOrdersCsv = () => {
+    const headers = ['Order ID', 'Customer', 'Email', 'Phone', 'Product', 'Vendor', 'Quantity', 'Amount', 'Status', 'Source', 'Address', 'Created At'];
+    const rows = orders.map((order) => [
+      order.id,
+      order.customer_name,
+      order.customer_email,
+      order.customer_phone || '',
+      order.product_name || '',
+      order.vendor_name || '',
+      order.quantity,
+      order.total_amount,
+      order.status,
+      order.source,
+      order.delivery_address || '',
+      order.created_at,
+    ]);
     downloadCsv(
       'orders.csv',
+      headers,
+      rows
+    );
+  };
+
+  const handleDownloadOrdersExcel = () => {
+    downloadExcel(
+      'orders.xls',
+      'Orders',
       ['Order ID', 'Customer', 'Email', 'Phone', 'Product', 'Vendor', 'Quantity', 'Amount', 'Status', 'Source', 'Address', 'Created At'],
       orders.map((order) => [
         order.id,
@@ -409,6 +433,15 @@ export default function OrdersPage() {
               >
                 <Download className="h-4 w-4" />
                 CSV
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadOrdersExcel}
+                disabled={!orders.length}
+                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                Excel
               </button>
               <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">{orders.length} orders</div>
             </div>

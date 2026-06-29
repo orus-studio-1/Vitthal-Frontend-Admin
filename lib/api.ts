@@ -237,8 +237,8 @@ export const vendorAPI = {
 export const adminAPI = {
   getDashboard: () => api.get<ApiResponse<DashboardStats>>('/api/admin/dashboard'),
 
-  getAnalytics: (period?: string) =>
-    api.get<ApiResponse<AnalyticsData>>('/api/admin/analytics', { params: { period } }),
+  getAnalytics: (period?: string, range?: { startDate?: string; endDate?: string }) =>
+    api.get<ApiResponse<AnalyticsData>>('/api/admin/analytics', { params: { period, ...range } }),
 
   getUsers: () => api.get<ApiResponse<UserManagementData>>('/api/admin/users'),
 

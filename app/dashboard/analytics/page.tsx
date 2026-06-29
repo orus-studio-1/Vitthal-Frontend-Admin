@@ -72,15 +72,21 @@ export default function AnalyticsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [period, setPeriod] = useState('30');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function fetchAnalytics(selectedPeriod: string) {
+  async function fetchAnalytics(selectedPeriod: string, selectedStartDate = startDate, selectedEndDate = endDate) {
     try {
       setLoading(true);
       setError('');
-      const response = await adminAPI.getAnalytics(selectedPeriod);
+      const hasRange = Boolean(selectedStartDate && selectedEndDate);
+      const response = await adminAPI.getAnalytics(
+        selectedPeriod,
+        hasRange ? { startDate: selectedStartDate, endDate: selectedEndDate } : undefined
+      );
       setData(response.data.data);
     } catch (analyticsError) {
       setError(extractApiError(analyticsError, 'Failed to load analytics'));
@@ -97,12 +103,17 @@ export default function AnalyticsPage() {
 
     if (isAuthenticated) {
       const timer = window.setTimeout(() => {
-        void fetchAnalytics(period);
+        void fetchAnalytics(period, startDate, endDate);
       }, 0);
 
       return () => window.clearTimeout(timer);
     }
-  }, [authLoading, isAuthenticated, period, router]);
+  }, [authLoading, isAuthenticated, period, startDate, endDate, router]);
+
+  const exportSuffix = useMemo(() => {
+    if (startDate && endDate) return `${startDate}-to-${endDate}`;
+    return `${period}-days`;
+  }, [endDate, period, startDate]);
 
   // Compute stats
   const kpis = useMemo(() => {
@@ -404,7 +415,7 @@ export default function AnalyticsPage() {
       ...section.rows,
       [],
     ]);
-    downloadCsv(`analytics-${period}-days.csv`, ['Analytics Export'], rows);
+    downloadCsv(`analytics-${exportSuffix}.csv`, ['Analytics Export'], rows);
   };
 
   const handleDownloadPdf = () => {
@@ -443,8 +454,13 @@ export default function AnalyticsPage() {
       `Analytics report - ${data.period}`,
       chartCards,
       analyticsSections,
-      `analytics-${period}-days.pdf`
+      `analytics-${exportSuffix}.pdf`
     );
+  };
+
+  const clearDateRange = () => {
+    setStartDate('');
+    setEndDate('');
   };
 
   if (authLoading || !isAuthenticated) {
@@ -466,6 +482,7 @@ export default function AnalyticsPage() {
                 className="form-input mt-1.5"
                 value={period}
                 onChange={(event) => setPeriod(event.target.value)}
+                disabled={Boolean(startDate && endDate)}
               >
                 {periods.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -474,6 +491,35 @@ export default function AnalyticsPage() {
                 ))}
               </select>
             </div>
+            <div className="min-w-40">
+              <label className="form-label font-semibold text-xs uppercase tracking-wider text-slate-400">From</label>
+              <input
+                type="date"
+                className="form-input mt-1.5"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                max={endDate || undefined}
+              />
+            </div>
+            <div className="min-w-40">
+              <label className="form-label font-semibold text-xs uppercase tracking-wider text-slate-400">To</label>
+              <input
+                type="date"
+                className="form-input mt-1.5"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+                min={startDate || undefined}
+              />
+            </div>
+            {(startDate || endDate) ? (
+              <button
+                type="button"
+                onClick={clearDateRange}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Clear dates
+              </button>
+            ) : null}
             <div className="flex gap-2">
               <button
                 type="button"

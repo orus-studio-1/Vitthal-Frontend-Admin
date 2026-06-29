@@ -73,6 +73,8 @@ export default function AddProductPage() {
   const [category, setCategory] = useState("");
   const [productType, setProductType] = useState("");
   const [productTypes, setProductTypes] = useState<string[]>([]);
+  const [showProductTypeInput, setShowProductTypeInput] = useState(false);
+  const [newProductType, setNewProductType] = useState("");
   const [quotationLimit, setQuotationLimit] = useState("");
 
   const [attributes, setAttributes] = useState<AttributeDraft[]>([
@@ -151,6 +153,18 @@ export default function AddProductPage() {
       return isValidType && isValidSize;
     });
     setUploadedImages((prev) => [...prev, ...validFiles]);
+  };
+
+  const saveProductTypeOption = () => {
+    const nextType = newProductType.trim();
+    if (!nextType) return;
+    setProductTypes((current) => {
+      if (current.some((type) => type.toLowerCase() === nextType.toLowerCase())) return current;
+      return [...current, nextType].sort((a, b) => a.localeCompare(b));
+    });
+    setProductType(nextType);
+    setNewProductType("");
+    setShowProductTypeInput(false);
   };
 
   const removeImage = (index: number) => {
@@ -546,25 +560,60 @@ export default function AddProductPage() {
                 </select>
               </div>
 
-              {/* Product Type Custom Input with Datalist */}
+              {/* Product Type Select with Add Action */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Product Type *
-                </label>
-                <input
-                  type="text"
-                  list="product-types-list"
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Product Type *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowProductTypeInput((value) => !value)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                    aria-label="Add product type"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+                <select
                   value={productType}
                   onChange={(e) => setProductType(e.target.value)}
-                  placeholder="Enter or select type"
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   required
-                />
-                <datalist id="product-types-list">
+                >
+                  <option value="">Select product type</option>
                   {productTypes.map((type) => (
-                    <option key={type} value={type} />
+                    <option key={type} value={type}>{type}</option>
                   ))}
-                </datalist>
+                </select>
+                {showProductTypeInput ? (
+                  <div className="mt-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 p-3">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-blue-700">New product type</label>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={newProductType}
+                        onChange={(e) => setNewProductType(e.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            saveProductTypeOption();
+                          }
+                        }}
+                        placeholder="Write type and save"
+                        className="min-w-0 flex-1 rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={saveProductTypeOption}
+                        className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-800"
+                      >
+                        Save
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-slate-500">Saved product types appear here immediately and become available globally after the product is created.</p>
+                  </div>
+                ) : null}
               </div>
 
             </div>
