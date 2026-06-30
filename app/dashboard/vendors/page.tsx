@@ -2,18 +2,90 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, CheckCircle2, Eye, FileText, Loader2, Search, ToggleLeft, ToggleRight, X, XCircle } from 'lucide-react';
+import { Building2, CheckCircle2, Eye, FileText, Loader2, Search, Send, ToggleLeft, ToggleRight, X, XCircle } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import VendorInsightsModal from '../../../components/vendor-insights-modal';
-import { extractApiError, vendorAPI } from '../../../lib/api';
+import { extractApiError, quotationAPI, vendorAPI, productAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
-import { Vendor, VendorInsightsData } from '../../../lib/types';
+import { CreateVendorQuotationPayload, Vendor, VendorInsightsData, VendorQuotation } from '../../../lib/types';
+
+const CATEGORY_OPTIONS = [
+  { code: "plastic", label: "Plastic" },
+  { code: "metal", label: "Metal" },
+  { code: "chemicals", label: "Chemicals" },
+  { code: "construction", label: "Construction" },
+  { code: "machinery", label: "Machinery" },
+  { code: "packaging", label: "Packaging" },
+  { code: "textiles", label: "Textiles" },
+  { code: "automotive", label: "Automotive" },
+  { code: "agriculture", label: "Agriculture" },
+  { code: "electrical", label: "Electrical" },
+];
+
+const BUSINESS_TYPES = [
+  "Manufacturing",
+  "Trading",
+  "Service Provider",
+  "Distributor",
+  "Dealer",
+  "Exporter",
+  "Importer",
+  "Other",
+];
+
+type QuotationFormState = {
+  title: string;
+  companyName: string;
+  businessType: string;
+  gstNumber: string;
+  gstCertificateLink: string;
+  companyWebsite: string;
+  alternativeNumber: string;
+  designation: string;
+  businessDescription: string;
+  creditCycle: string;
+  minCommission: string;
+  maxCommission: string;
+  categories: string[];
+};
+
+const defaultQuotationForm: QuotationFormState = {
+  title: '',
+  companyName: '',
+  businessType: '',
+  gstNumber: '',
+  gstCertificateLink: '',
+  companyWebsite: '',
+  alternativeNumber: '',
+  designation: '',
+  businessDescription: '',
+  creditCycle: '',
+  minCommission: '',
+  maxCommission: '',
+  categories: [],
+};
 
 export default function VendorsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [categoriesOptions, setCategoriesOptions] = useState<any[]>(CATEGORY_OPTIONS);
 
+  useEffect(() => {
+    async function fetchCats() {
+      try {
+        const response = await productAPI.getCategories();
+        if (response.data?.data) {
+          setCategoriesOptions(response.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load categories:", err);
+      }
+    }
+    fetchCats();
+  }, []);
+
+  const [quotations, setQuotations] = useState<VendorQuotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
@@ -21,6 +93,10 @@ export default function VendorsPage() {
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState('');
   const [timeframe, setTimeframe] = useState<'month' | '6months' | 'year'>('year');
+  const [quotationVendor, setQuotationVendor] = useState<Vendor | null>(null);
+  const [quotationForm, setQuotationForm] = useState<QuotationFormState>(defaultQuotationForm);
+  const [quotationSubmitting, setQuotationSubmitting] = useState(false);
+  const [quotationFeedback, setQuotationFeedback] = useState<{ type: 'success' | 'error'; text: string; link?: string } | null>(null);
   const [blockingVendor, setBlockingVendor] = useState<Vendor | null>(null);
   const [unblockingVendor, setUnblockingVendor] = useState<Vendor | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,8 +108,12 @@ export default function VendorsPage() {
     try {
       setLoading(true);
       setError('');
-      const vendorsResponse = await vendorAPI.getAll();
+      const [vendorsResponse, quotationsResponse] = await Promise.all([
+        vendorAPI.getAll(),
+        quotationAPI.getAll(),
+      ]);
       setVendors(vendorsResponse.data.data);
+      setQuotations(quotationsResponse.data.data);
     } catch (vendorsError) {
       setError(extractApiError(vendorsError, 'Failed to load vendors'));
     } finally {
@@ -121,6 +201,93 @@ export default function VendorsPage() {
     await loadVendorInsights(vendor, timeframe);
   };
 
+  const openQuotationModal = (vendor: Vendor) => {
+    setQuotationVendor(vendor);
+    setQuotationFeedback(null);
+    setQuotationForm({
+      title: `${vendor.company_name} vendor agreement`,
+      companyName: vendor.company_name || '',
+      businessType: vendor.business_type || '',
+      gstNumber: vendor.gst_number || '',
+      gstCertificateLink: vendor.gst_certificate_link || '',
+      companyWebsite: vendor.company_website || '',
+      alternativeNumber: vendor.alternative_number || '',
+      designation: vendor.designation || '',
+      businessDescription: vendor.business_description || '',
+      creditCycle: vendor.credit_cycle || '',
+      minCommission: vendor.minimum_commision_percentage !== null && vendor.minimum_commision_percentage !== undefined ? String(vendor.minimum_commision_percentage) : '',
+      maxCommission: vendor.maximum_commision_percentage !== null && vendor.maximum_commision_percentage !== undefined ? String(vendor.maximum_commision_percentage) : '',
+      categories: vendor.categories?.map(c => c.code) || [],
+    });
+  };
+
+  const closeQuotationModal = () => {
+    if (quotationSubmitting) return;
+    setQuotationVendor(null);
+    setQuotationForm(defaultQuotationForm);
+  };
+
+  const handleQuotationSubmit = async () => {
+    if (!quotationVendor) return;
+
+    try {
+      setQuotationSubmitting(true);
+      setQuotationFeedback(null);
+
+      const payload: CreateVendorQuotationPayload = {
+        vendorId: quotationVendor.id,
+        quotationKind: 'vendor_agreement',
+        title: quotationForm.title.trim(),
+        vendorUpdates: {
+          companyName: quotationForm.companyName.trim(),
+          businessType: quotationForm.businessType.trim(),
+          gstNumber: quotationForm.gstNumber.trim(),
+          gstCertificateLink: quotationForm.gstCertificateLink.trim(),
+          companyWebsite: quotationForm.companyWebsite.trim(),
+          alternativeNumber: quotationForm.alternativeNumber.trim(),
+          designation: quotationForm.designation.trim(),
+          businessDescription: quotationForm.businessDescription.trim(),
+          creditCycle: quotationForm.creditCycle.trim(),
+          minimumCommissionPercentage: quotationForm.minCommission ? Number(quotationForm.minCommission) : undefined,
+          maximumCommissionPercentage: quotationForm.maxCommission ? Number(quotationForm.maxCommission) : undefined,
+          vendorCategories: quotationForm.categories,
+        }
+      };
+
+      const response = await quotationAPI.create(payload);
+      setQuotationFeedback({
+        type: 'success',
+        text: response.data.message || 'Agreement sent successfully.',
+        link: response.data.data.vendorLink,
+      });
+      setQuotationVendor(null);
+      setQuotationForm(defaultQuotationForm);
+    } catch (quotationError) {
+      setQuotationFeedback({
+        type: 'error',
+        text: extractApiError(quotationError, 'Failed to send agreement'),
+      });
+    } finally {
+      setQuotationSubmitting(false);
+    }
+  };
+
+  const agreementQuotations = useMemo(
+    () => quotations.filter((quotation) => quotation.quotation_kind === 'vendor_agreement'),
+    [quotations]
+  );
+  const latestAgreementByVendor = useMemo(
+    () =>
+      agreementQuotations.reduce<Record<string, VendorQuotation>>((accumulator, quotation) => {
+        const current = accumulator[quotation.vendor_id];
+        if (!current || new Date(quotation.created_at).getTime() > new Date(current.created_at).getTime()) {
+          accumulator[quotation.vendor_id] = quotation;
+        }
+        return accumulator;
+      }, {}),
+    [agreementQuotations]
+  );
+
   const filteredVendors = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return vendors;
@@ -144,8 +311,11 @@ export default function VendorsPage() {
     return filteredVendors;
   }, [filteredVendors]);
 
+  const getAgreementForVendor = (vendorId: string) => latestAgreementByVendor[vendorId] || null;
+  const canSendAgreement = (vendor: Vendor) => vendor.approval_status === 'pending' && !getAgreementForVendor(vendor.id);
   const canApproveVendor = (vendor: Vendor) => {
-    return vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent';
+    const agreement = getAgreementForVendor(vendor.id);
+    return vendor.approval_status === 'agreement_sent' && Boolean(agreement && ['vendor_approved', 'admin_approved'].includes(agreement.status));
   };
   const canRejectVendor = (vendor: Vendor) => {
     return vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent';
@@ -168,11 +338,22 @@ export default function VendorsPage() {
           </div>
 
           {error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+          {quotationFeedback ? (
+            <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm ${quotationFeedback.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+              <p>{quotationFeedback.text}</p>
+              {quotationFeedback.link ? (
+                <p className="mt-1 break-all text-xs text-emerald-700/90">{quotationFeedback.link}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           {loading ? (
             <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-700" /></div>
           ) : reviewPendingVendors.length ? (
             <div className="space-y-4">
               {reviewPendingVendors.map((vendor) => {
+                const agreement = getAgreementForVendor(vendor.id);
+
                 return (
                   <article key={vendor.id} className="rounded-2xl border border-slate-200 p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -187,17 +368,21 @@ export default function VendorsPage() {
                         </div>
                         <p className="mt-1 text-sm text-slate-500">{vendor.name} • {vendor.email}</p>
                         <p className="mt-2 text-sm text-slate-600">{vendor.phone || 'No phone'} {vendor.gst_number ? `• ${vendor.gst_number}` : ''}</p>
-                        {vendor.vendor_signature_image_link ? (
-                          <p className="mt-2 text-xs text-emerald-700">Signature image uploaded</p>
-                        ) : (
-                          <p className="mt-2 text-xs text-red-600">Signature image missing</p>
-                        )}
+                        {agreement ? (
+                          <p className="mt-2 text-xs text-slate-500">Agreement status: {agreement.status.replaceAll('_', ' ')}</p>
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => void openVendorView(vendor)} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
                           <Eye className="h-4 w-4" />
                           View
                         </button>
+                        {canSendAgreement(vendor) ? (
+                          <button onClick={() => openQuotationModal(vendor)} className="flex items-center gap-2 rounded-2xl border border-blue-200 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-50">
+                            <Send className="h-4 w-4" />
+                            Send agreement
+                          </button>
+                        ) : null}
                         {canApproveVendor(vendor) ? (
                           <button onClick={() => reviewVendor(vendor.id, 'approved')} className="flex items-center gap-2 rounded-2xl border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
                             <CheckCircle2 className="h-4 w-4" />
@@ -284,7 +469,7 @@ export default function VendorsPage() {
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Vendor list</h2>
-              <p className="text-sm text-slate-500">Use View to inspect vendor analytics, documents, and uploaded signature details.</p>
+              <p className="text-sm text-slate-500">Use View to inspect vendor analytics, or send a one-time agreement directly from the vendor card.</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3">
               <div className={`flex items-center justify-end transition-all ${isSearchOpen ? 'w-full sm:w-[360px]' : 'w-12'}`}>
@@ -372,6 +557,15 @@ export default function VendorsPage() {
                         <Eye className="h-4 w-4" />
                         View
                       </button>
+                      {canSendAgreement(vendor) ? (
+                        <button
+                          onClick={() => openQuotationModal(vendor)}
+                          className="flex items-center gap-2 rounded-2xl border border-blue-200 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                        >
+                          <Send className="h-4 w-4" />
+                          Send agreement
+                        </button>
+                      ) : null}
                       {canApproveVendor(vendor) ? (
                         <button onClick={() => reviewVendor(vendor.id, 'approved')} className="flex items-center gap-2 rounded-2xl border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
                           <CheckCircle2 className="h-4 w-4" />
@@ -417,6 +611,175 @@ export default function VendorsPage() {
           }}
           onTimeframeChange={(value) => setTimeframe(value)}
         />
+      ) : null}
+
+      {quotationVendor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8">
+          <div className="w-full max-w-2xl rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-slate-500">One-time agreement</p>
+                <h3 className="mt-2 text-xl font-semibold text-slate-900">{quotationVendor.company_name}</h3>
+                <p className="mt-1 text-sm text-slate-500">{quotationVendor.name} • {quotationVendor.email}</p>
+              </div>
+              <button onClick={closeQuotationModal} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid gap-4 px-6 py-5 sm:grid-cols-2 max-h-[65vh] overflow-y-auto">
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium text-slate-700">Agreement title</span>
+                <input
+                  value={quotationForm.title}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, title: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Company Name</span>
+                <input
+                  value={quotationForm.companyName}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, companyName: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Business Type</span>
+                <select
+                  value={quotationForm.businessType}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, businessType: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                >
+                  <option value="">Select type</option>
+                  {BUSINESS_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">GST Number</span>
+                <input
+                  value={quotationForm.gstNumber}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, gstNumber: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Company Website</span>
+                <input
+                  value={quotationForm.companyWebsite}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, companyWebsite: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Alternative Phone</span>
+                <input
+                  value={quotationForm.alternativeNumber}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, alternativeNumber: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Designation</span>
+                <input
+                  value={quotationForm.designation}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, designation: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Credit Cycle</span>
+                <input
+                  value={quotationForm.creditCycle}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, creditCycle: event.target.value }))}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <div className="flex gap-4">
+                <label className="space-y-2 w-full">
+                  <span className="text-sm font-medium text-slate-700">Min Commission %</span>
+                  <input
+                    type="number"
+                    value={quotationForm.minCommission}
+                    onChange={(event) => setQuotationForm((current) => ({ ...current, minCommission: event.target.value }))}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                  />
+                </label>
+                <label className="space-y-2 w-full">
+                  <span className="text-sm font-medium text-slate-700">Max Commission %</span>
+                  <input
+                    type="number"
+                    value={quotationForm.maxCommission}
+                    onChange={(event) => setQuotationForm((current) => ({ ...current, maxCommission: event.target.value }))}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                  />
+                </label>
+              </div>
+
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium text-slate-700">Business Description</span>
+                <textarea
+                  value={quotationForm.businessDescription}
+                  onChange={(event) => setQuotationForm((current) => ({ ...current, businessDescription: event.target.value }))}
+                  className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400"
+                />
+              </label>
+
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium text-slate-700">Categories</span>
+                <div className="flex flex-wrap gap-2">
+                  {categoriesOptions.map(cat => (
+                    <button
+                      key={cat.code}
+                      onClick={() => {
+                        setQuotationForm(curr => {
+                          const cats = curr.categories.includes(cat.code)
+                            ? curr.categories.filter(c => c !== cat.code)
+                            : [...curr.categories, cat.code];
+                          return { ...curr, categories: cats };
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded-2xl text-xs font-medium border transition ${quotationForm.categories.includes(cat.code)
+                          ? 'border-blue-600 bg-blue-50 text-blue-700'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-200 px-6 py-5">
+              <p className="max-w-md text-xs text-slate-500">The vendor will receive a PDF attachment plus a secure signing link. Once the vendor responds, approval will unlock here.</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={closeQuotationModal}
+                  className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void handleQuotationSubmit()}
+                  disabled={quotationSubmitting}
+                  className="flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-medium text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {quotationSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send agreement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {/* Block Vendor Confirmation Modal */}
