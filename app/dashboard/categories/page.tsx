@@ -483,12 +483,16 @@ export default function CategoriesPage() {
                   <input
                     type="text"
                     required
-                    disabled={isEditOpen} // Code shouldn't change easily since frontend uses it as path
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
                     placeholder="e.g. precision_cnc_tooling"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition disabled:opacity-60"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   />
+                  {isEditOpen ? (
+                    <p className="mt-1.5 text-[11px] leading-4 text-amber-600">
+                      Updating this identifier changes the category code used by product/category filters. Duplicate codes are blocked automatically.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>
