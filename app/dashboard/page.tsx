@@ -66,33 +66,6 @@ export default function DashboardPage() {
     }
   }, [authLoading, isAuthenticated, router]);
 
-  if (authLoading || !isAuthenticated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-700" />
-      </div>
-    );
-  }
-
-  const statCards = [
-    { name: 'Total Users', value: stats?.totals.users || 0, icon: Users, tone: 'bg-blue-50 text-blue-700' },
-    { name: 'Total Products', value: stats?.totals.products || 0, icon: Package, tone: 'bg-emerald-50 text-emerald-700' },
-    { name: 'Total Orders', value: stats?.totals.orders || 0, icon: ShoppingCart, tone: 'bg-violet-50 text-violet-700' },
-    { name: 'Active Vendors', value: stats?.totals.activeVendors || 0, icon: Building2, tone: 'bg-amber-50 text-amber-700' },
-  ];
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      shipped: 'bg-purple-100 text-purple-800',
-      delivered: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
-    };
-
-    return colors[status] || 'bg-slate-100 text-slate-700';
-  };
-
   const statusChartData = useMemo(() => {
     const entries = Object.entries(stats?.orderStats || {});
     return {
@@ -181,6 +154,33 @@ export default function DashboardPage() {
       },
     ];
   }, [stats]);
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-700" />
+      </div>
+    );
+  }
+
+  const statCards = [
+    { name: 'Total Users', value: stats?.totals.users || 0, icon: Users, tone: 'bg-blue-50 text-blue-700' },
+    { name: 'Total Products', value: stats?.totals.products || 0, icon: Package, tone: 'bg-emerald-50 text-emerald-700' },
+    { name: 'Total Orders', value: stats?.totals.orders || 0, icon: ShoppingCart, tone: 'bg-violet-50 text-violet-700' },
+    { name: 'Active Vendors', value: stats?.totals.activeVendors || 0, icon: Building2, tone: 'bg-amber-50 text-amber-700' },
+  ];
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      confirmed: 'bg-blue-100 text-blue-800',
+      shipped: 'bg-purple-100 text-purple-800',
+      delivered: 'bg-green-100 text-green-800',
+      cancelled: 'bg-red-100 text-red-800',
+    };
+
+    return colors[status] || 'bg-slate-100 text-slate-700';
+  };
 
   const openOrderDetail = (orderId: string) => {
     router.push(`/dashboard/orders?orderId=${orderId}`);
