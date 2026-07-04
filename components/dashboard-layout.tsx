@@ -20,6 +20,7 @@ import {
   Tags,
   DollarSign,
   MapPin,
+  Bike,
 } from 'lucide-react';
 
 const navigation = [
@@ -29,6 +30,7 @@ const navigation = [
   { name: 'Categories', href: '/dashboard/categories', icon: Tags },
   { name: 'Vendors', href: '/dashboard/vendors', icon: Building2 },
   { name: 'Fulfillment Centers', href: '/dashboard/fulfillment-centers', icon: MapPin },
+  { name: 'Rider Partners', href: '/dashboard/riders', icon: Bike },
   { name: 'Vendor Chat', href: '/dashboard/vendor-chat', icon: MessageSquare },
   { name: 'Quotations', href: '/dashboard/quotations', icon: FileText },
   { name: 'Client Quotations', href: '/dashboard/client-quotations', icon: FileText },

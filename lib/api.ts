@@ -320,4 +320,12 @@ export const fulfillmentCenterAPI = {
     api.delete<{ message: string }>(`/api/admin/fulfillment-centers/${id}`),
 };
 
+export const riderAPI = {
+  getAll: () =>
+    api.get<ApiResponse<any[]>>('/api/admin/delivery-agents'),
+
+  create: (data: any) =>
+    api.post<ApiResponse<any>>('/api/admin/delivery-agents', data),
+};
+
 export default api;
