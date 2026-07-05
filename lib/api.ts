@@ -123,6 +123,7 @@ export const productAPI = {
     max_commision_percentage: number;
     sort_order: number;
     is_active: boolean;
+    category_type?: 'product' | 'service';
   }) => api.post<ApiResponse<any>>('/api/products/categories/add', data, data instanceof FormData ? {
     headers: {
       'Content-Type': 'multipart/form-data',
@@ -140,6 +141,7 @@ export const productAPI = {
       max_commision_percentage: number;
       sort_order: number;
       is_active: boolean;
+      category_type?: 'product' | 'service';
     }>
   ) => api.put<ApiResponse<any>>(`/api/products/categories/${id}`, data, data instanceof FormData ? {
     headers: {
@@ -326,6 +328,33 @@ export const riderAPI = {
 
   create: (data: any) =>
     api.post<ApiResponse<any>>('/api/admin/delivery-agents', data),
+};
+
+export const serviceAPI = {
+  getAll: (params?: { status?: string; search?: string; page?: number; limit?: number }) =>
+    api.get<ApiResponse<any>>('/api/services', { params }),
+
+  create: (data: { name: string; description?: string; categoryId: string; status?: string }) =>
+    api.post<ApiResponse<any>>('/api/services', data),
+
+  update: (
+    id: string,
+    data: Partial<{
+      name: string;
+      description: string;
+      categoryId: string;
+      status: string;
+    }>
+  ) => api.put<ApiResponse<any>>(`/api/services/${id}`, data),
+
+  review: (id: string, decision: 'approved' | 'rejected', notes?: string) =>
+    api.put<ApiResponse<any>>(`/api/services/${id}/review`, { decision, notes }),
+
+  delete: (id: string) =>
+    api.delete<{ message: string }>(`/api/services/${id}`),
+
+  getOfferings: (serviceId: string) =>
+    api.get<ApiResponse<any[]>>(`/api/services/offerings`, { params: { serviceId } }),
 };
 
 export default api;

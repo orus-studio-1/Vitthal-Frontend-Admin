@@ -182,6 +182,7 @@ export interface Vendor {
   approval_notes?: string | null;
   reconsideration_notes?: string | null;
   application_number?: string | null;
+  vendor_type?: 'product' | 'service' | 'both' | null;
   is_active: boolean;
   is_blocked: boolean;
   created_at: string;
@@ -533,4 +534,36 @@ export interface FulfillmentCenter {
   status: 'active' | 'inactive' | 'maintenance';
   created_at: string;
   updated_at: string;
+}
+
+export interface Category {
+  id: string;
+  code: string;
+  label: string;
+  description: string | null;
+  image: string;
+  min_commision_percentage: number;
+  max_commision_percentage: number;
+  sort_order: number;
+  is_active: boolean;
+  category_type?: 'product' | 'service';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  description?: string | null;
+  category_id: string;
+  category_label?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  created_by_user_id?: string | null;
+  is_active: boolean;
+  rating: string | number;
+  review_count: number;
+  created_at: string;
+  updated_at: string;
+  vendor_count?: number | string;
+  booking_count?: number | string;
 }
