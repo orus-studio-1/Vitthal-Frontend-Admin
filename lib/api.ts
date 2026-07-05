@@ -354,7 +354,7 @@ export const serviceAPI = {
     api.delete<{ message: string }>(`/api/services/${id}`),
 
   getOfferings: (serviceId: string) =>
-    api.get<ApiResponse<any[]>>(`/api/services/offerings`, { params: { serviceId } }),
+    api.get<ApiResponse<any[]>>(`/api/services/${serviceId}/offerings`),
 };
 
 export default api;
