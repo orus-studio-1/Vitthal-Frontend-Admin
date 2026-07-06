@@ -326,6 +326,9 @@ export const riderAPI = {
 
   create: (data: any) =>
     api.post<ApiResponse<any>>('/api/admin/delivery-agents', data),
+
+  getLiveDetails: (id: string) =>
+    api.get<ApiResponse<any>>(`/api/admin/delivery-agents/${id}/live`),
 };
 
 export default api;

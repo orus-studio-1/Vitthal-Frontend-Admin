@@ -2,10 +2,25 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Loader2, Bike, Mail, Phone, MapPin, ShieldCheck, ShieldAlert, X } from 'lucide-react';
+import { Plus, Search, Loader2, Bike, Mail, Phone, MapPin, ShieldCheck, ShieldAlert, X, Navigation } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, riderAPI, fulfillmentCenterAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
+import dynamic from 'next/dynamic';
+
+const LiveTrackModal = dynamic(() => import('../../../components/live-track-modal'), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="flex h-[88vh] w-full max-w-6xl items-center justify-center rounded-[2rem] border border-slate-100 bg-white shadow-2xl">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+          <p className="text-sm font-semibold text-slate-500">Loading tracking dashboard...</p>
+        </div>
+      </div>
+    </div>
+  ),
+});
 
 interface DeliveryAgent {
   id: string;
@@ -31,7 +46,9 @@ export default function RidersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
+  const [trackingRiderId, setTrackingRiderId] = useState<string | null>(null);
 
   // Form Modal State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -246,6 +263,7 @@ export default function RidersPage() {
                     <th className="px-6 py-4">Attached Hub</th>
                     <th className="px-6 py-4">Shift Status</th>
                     <th className="px-6 py-4">Account Status</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -315,6 +333,21 @@ export default function RidersPage() {
                           )}
                           <span className="capitalize">{rider.status}</span>
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          disabled={!rider.is_online}
+                          onClick={() => setTrackingRiderId(rider.id)}
+                          className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold border transition ${
+                            rider.is_online
+                              ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800 shadow-sm cursor-pointer'
+                              : 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                          }`}
+                          title={rider.is_online ? "Track Live Location" : "Rider is offline"}
+                        >
+                          <Navigation className="h-3 w-3 rotate-45 fill-current" />
+                          Track Live
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -445,6 +478,14 @@ export default function RidersPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* LIVE TRACKING MODAL */}
+      {trackingRiderId && (
+        <LiveTrackModal
+          riderId={trackingRiderId}
+          onClose={() => setTrackingRiderId(null)}
+        />
       )}
     </DashboardLayout>
   );

@@ -10,6 +10,16 @@ import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, fulfillmentCenterAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { FulfillmentCenter } from '../../../lib/types';
+import dynamic from 'next/dynamic';
+
+const MapPicker = dynamic(() => import('../../../components/map-picker'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[240px] items-center justify-center bg-slate-50 border border-slate-100 rounded-2xl">
+      <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+    </div>
+  ),
+});
 
 const STORAGE_TYPES = [
   "Ambient",
@@ -620,6 +630,17 @@ export default function FulfillmentCentersPage() {
                       />
                     </div>
                   </div>
+                  
+                  {/* Interactive Map Picker */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-slate-500">Pin Hub Location on Map</label>
+                    <MapPicker
+                      latitude={formData.latitude}
+                      longitude={formData.longitude}
+                      onChange={(lat, lng) => setFormData({ ...formData, latitude: String(lat), longitude: String(lng) })}
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 mb-1">Latitude</label>
