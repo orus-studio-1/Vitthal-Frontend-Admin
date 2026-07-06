@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   CheckCircle2,
   Loader2,
@@ -14,7 +15,8 @@ import {
   AlertCircle,
   Layers,
   Upload,
-  ImageIcon
+  ImageIcon,
+  ArrowLeft
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, productAPI } from '../../../lib/api';
@@ -270,6 +272,13 @@ export default function ServiceCategoriesPage() {
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard/services"
+                className="p-2 text-slate-405 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all mr-1"
+                title="Go back to Services Control Center"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 shadow-sm">
                 <Layers className="h-6 w-6" />
               </div>

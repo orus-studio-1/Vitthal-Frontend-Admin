@@ -355,6 +355,17 @@ export const serviceAPI = {
 
   getOfferings: (serviceId: string) =>
     api.get<ApiResponse<any[]>>(`/api/services/${serviceId}/offerings`),
+
+  uploadMedia: (serviceId: string, formData: FormData) =>
+    api.post<ApiResponse<any>>(`/api/services/${serviceId}/media`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  getBookings: (params?: { status?: string; vendorId?: string; page?: number; limit?: number }) =>
+    api.get<ApiResponse<any>>('/api/services/admin/bookings', { params }),
+
+  getQuotations: (params?: { status?: string; vendorId?: string; page?: number; limit?: number }) =>
+    api.get<ApiResponse<any>>('/api/services/admin/quotations', { params }),
 };
 
 export default api;
