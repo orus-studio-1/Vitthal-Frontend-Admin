@@ -21,13 +21,16 @@ import {
   DollarSign,
   MapPin,
   Bike,
+  Wrench,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Products', href: '/dashboard/products', icon: Package },
   { name: 'Price Approvals', href: '/dashboard/products/price-approvals', icon: DollarSign },
-  { name: 'Categories', href: '/dashboard/categories', icon: Tags },
+  { name: 'Product Categories', href: '/dashboard/categories', icon: Tags },
+  { name: 'Service Categories', href: '/dashboard/service-categories', icon: Tags },
+  { name: 'Services', href: '/dashboard/services', icon: Wrench },
   { name: 'Vendors', href: '/dashboard/vendors', icon: Building2 },
   { name: 'Fulfillment Centers', href: '/dashboard/fulfillment-centers', icon: MapPin },
   { name: 'Rider Partners', href: '/dashboard/riders', icon: Bike },

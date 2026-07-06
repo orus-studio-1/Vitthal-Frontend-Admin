@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, CheckCircle2, Eye, FileText, Loader2, Search, Send, ToggleLeft, ToggleRight, X, XCircle } from 'lucide-react';
+import { Building2, CheckCircle2, Eye, FileText, Loader2, Search, Send, ToggleLeft, ToggleRight, X, XCircle, Package, Wrench } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import VendorInsightsModal from '../../../components/vendor-insights-modal';
 import { extractApiError, quotationAPI, vendorAPI, productAPI } from '../../../lib/api';
@@ -102,6 +102,7 @@ export default function VendorsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [reconsiderationNotes, setReconsiderationNotes] = useState<Record<string, string>>({});
+  const [activeVendorTab, setActiveVendorTab] = useState<'product' | 'service'>('product');
   const [activeReconsiderationVendorId, setActiveReconsiderationVendorId] = useState<string | null>(null);
 
   async function fetchVendors() {
@@ -304,12 +305,25 @@ export default function VendorsPage() {
   }, [vendors, searchQuery]);
 
   const reviewPendingVendors = useMemo(() => {
-    return filteredVendors.filter((vendor) => vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent');
-  }, [filteredVendors]);
+    return filteredVendors.filter(
+      (vendor) =>
+        (vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent') &&
+        (activeVendorTab === 'product'
+          ? vendor.vendor_type === 'product' || vendor.vendor_type === 'both' || !vendor.vendor_type
+          : vendor.vendor_type === 'service' || vendor.vendor_type === 'both')
+    );
+  }, [filteredVendors, activeVendorTab]);
 
   const approvedVendors = useMemo(() => {
-    return filteredVendors;
-  }, [filteredVendors]);
+    return filteredVendors.filter(
+      (vendor) =>
+        vendor.approval_status !== 'pending' &&
+        vendor.approval_status !== 'agreement_sent' &&
+        (activeVendorTab === 'product'
+          ? vendor.vendor_type === 'product' || vendor.vendor_type === 'both' || !vendor.vendor_type
+          : vendor.vendor_type === 'service' || vendor.vendor_type === 'both')
+    );
+  }, [filteredVendors, activeVendorTab]);
 
   const getAgreementForVendor = (vendorId: string) => latestAgreementByVendor[vendorId] || null;
   const canSendAgreement = (vendor: Vendor) => vendor.approval_status === 'pending' && !getAgreementForVendor(vendor.id);
@@ -328,6 +342,31 @@ export default function VendorsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <div className="flex border border-slate-200 bg-white rounded-2xl p-1 shadow-sm max-w-sm">
+          <button
+            onClick={() => setActiveVendorTab('product')}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all duration-200 ${
+              activeVendorTab === 'product'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Package className="h-4 w-4" />
+            Product Vendors
+          </button>
+          <button
+            onClick={() => setActiveVendorTab('service')}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all duration-200 ${
+              activeVendorTab === 'service'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Wrench className="h-4 w-4" />
+            Service Vendors
+          </button>
+        </div>
+
         <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-center justify-between">
             <div>

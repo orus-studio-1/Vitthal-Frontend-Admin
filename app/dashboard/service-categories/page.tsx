@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   CheckCircle2,
   Loader2,
@@ -11,37 +12,18 @@ import {
   Edit2,
   Save,
   Plus,
-  FolderPlus,
   AlertCircle,
-  Tag,
-  Eye,
-  Info,
-  Calendar,
   Layers,
-  Percent,
-  TrendingUp,
   Upload,
-  ImageIcon
+  ImageIcon,
+  ArrowLeft
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, productAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
+import { Category } from '../../../lib/types';
 
-interface Category {
-  id: string;
-  code: string;
-  label: string;
-  description: string | null;
-  image: string;
-  min_commision_percentage: number;
-  max_commision_percentage: number;
-  sort_order: number;
-  is_active: boolean;
-  created_at?: string;
-  updated_at?: string;
-}
-
-export default function CategoriesPage() {
+export default function ServiceCategoriesPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
@@ -79,7 +61,7 @@ export default function CategoriesPage() {
     formData.append('max_commision_percentage', String(Number(maxCommision)));
     formData.append('sort_order', String(Number(sortOrder)));
     formData.append('is_active', String(isActive));
-    formData.append('category_type', 'product');
+    formData.append('category_type', 'service');
     if (imageFile) {
       formData.append('image', imageFile);
     }
@@ -112,12 +94,12 @@ export default function CategoriesPage() {
       setError('');
       const response = await productAPI.getCategories();
       if (response.data?.data) {
-        // Filter: only show 'product' categories
-        const productCats = response.data.data.filter((c: any) => c.category_type === 'product' || !c.category_type);
-        setCategories(productCats);
+        // Filter: only show 'service' categories
+        const serviceCats = response.data.data.filter((c: any) => c.category_type === 'service');
+        setCategories(serviceCats);
       }
     } catch (err) {
-      setError(extractApiError(err, 'Failed to load categories'));
+      setError(extractApiError(err, 'Failed to load service categories'));
     } finally {
       setLoading(false);
     }
@@ -183,11 +165,11 @@ export default function CategoriesPage() {
       setSuccess('');
       await productAPI.createCategory(buildCategoryFormData());
 
-      setSuccess(`Category "${label}" added successfully!`);
+      setSuccess(`Service Category "${label}" added successfully!`);
       setIsAddOpen(false);
       await fetchCategories();
     } catch (err) {
-      setError(extractApiError(err, 'Failed to create category'));
+      setError(extractApiError(err, 'Failed to create service category'));
     } finally {
       setSubmitting(false);
     }
@@ -209,11 +191,11 @@ export default function CategoriesPage() {
       setSuccess('');
       await productAPI.updateCategory(selectedCategory.id, buildCategoryFormData());
 
-      setSuccess(`Category "${label}" updated successfully!`);
+      setSuccess(`Service Category "${label}" updated successfully!`);
       setIsEditOpen(false);
       await fetchCategories();
     } catch (err) {
-      setError(extractApiError(err, 'Failed to update category'));
+      setError(extractApiError(err, 'Failed to update service category'));
     } finally {
       setSubmitting(false);
     }
@@ -226,8 +208,9 @@ export default function CategoriesPage() {
       setSuccess('');
       await productAPI.updateCategory(category.id, {
         is_active: !category.is_active,
+        category_type: 'service'
       });
-      setSuccess(`Category "${category.label}" status updated!`);
+      setSuccess(`Service Category "${category.label}" status updated!`);
       await fetchCategories();
     } catch (err) {
       setError(extractApiError(err, 'Failed to toggle category status'));
@@ -244,7 +227,7 @@ export default function CategoriesPage() {
       setError('');
       setSuccess('');
       await productAPI.deleteCategory(id);
-      setSuccess(`Category "${name}" deleted successfully!`);
+      setSuccess(`Service Category "${name}" deleted successfully!`);
       await fetchCategories();
     } catch (err) {
       setError(extractApiError(err, 'Failed to delete category'));
@@ -289,12 +272,19 @@ export default function CategoriesPage() {
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard/services"
+                className="p-2 text-slate-405 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all mr-1"
+                title="Go back to Services Control Center"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 shadow-sm">
                 <Layers className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">Manage Product Categories</h1>
-                <p className="text-sm text-slate-500">Configure client-facing product categories, commission structures, and sorting hierarchy.</p>
+                <h1 className="text-2xl font-bold text-slate-900">Manage Service Categories</h1>
+                <p className="text-sm text-slate-500">Configure client-facing service categories, commission structures, and sorting hierarchy.</p>
               </div>
             </div>
             <button
@@ -302,7 +292,7 @@ export default function CategoriesPage() {
               className="flex items-center gap-2 self-start sm:self-center px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold shadow-md hover:shadow-lg transition-all duration-200"
             >
               <Plus className="h-4 w-4" />
-              Add Product Category
+              Add Service Category
             </button>
           </div>
         </section>
@@ -310,7 +300,7 @@ export default function CategoriesPage() {
         {/* Categories registry */}
         <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.06)] backdrop-blur-sm">
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900">Registry Product Categories ({categories.length})</h2>
+            <h2 className="text-lg font-bold text-slate-900">Registry Service Categories ({categories.length})</h2>
             <div className="rounded-full bg-slate-100 px-3 py-1 font-mono text-xs font-semibold text-slate-700">
               {categories.filter(c => c.is_active).length} Active / {categories.filter(c => !c.is_active).length} Inactive
             </div>
@@ -419,7 +409,7 @@ export default function CategoriesPage() {
             </div>
           ) : (
             <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-sm text-slate-400">
-              No categories found. Click Add Category to get started.
+              No service categories found. Click Add Service Category to get started.
             </p>
           )}
         </div>
@@ -440,10 +430,10 @@ export default function CategoriesPage() {
             <header className="bg-white border-b border-slate-200 px-6 py-5 flex items-center justify-between shadow-sm">
               <div>
                 <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
-                  Category Management
+                  Service Category Management
                 </span>
                 <h3 className="text-lg font-bold text-slate-900">
-                  {isAddOpen ? 'Add Product Category' : 'Edit Category'}
+                  {isAddOpen ? 'Add Service Category' : 'Edit Service Category'}
                 </h3>
               </div>
               <button
@@ -474,7 +464,7 @@ export default function CategoriesPage() {
                     required
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
-                    placeholder="e.g. Precision CNC Tooling"
+                    placeholder="e.g. Structural Steel Fabrication"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   />
                 </div>
@@ -488,12 +478,12 @@ export default function CategoriesPage() {
                     required
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
-                    placeholder="e.g. precision_cnc_tooling"
+                    placeholder="e.g. structural_steel_fabrication"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   />
                   {isEditOpen ? (
                     <p className="mt-1.5 text-[11px] leading-4 text-amber-600">
-                      Updating this identifier changes the category code used by product/category filters. Duplicate codes are blocked automatically.
+                      Updating this identifier changes the category code used by service/category filters. Duplicate codes are blocked automatically.
                     </p>
                   ) : null}
                 </div>
