@@ -187,7 +187,7 @@ export default function VendorInsightsModal({
                   </div>
 
                   <div className="space-y-3 pt-2">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                       <div>
                         <p className="text-xs text-slate-400">Business Type</p>
                         <p className="text-sm font-semibold text-slate-800">{data.vendor.business_type || 'N/A'}</p>
@@ -195,6 +195,22 @@ export default function VendorInsightsModal({
                       <div>
                         <p className="text-xs text-slate-400">Credit Cycle</p>
                         <p className="text-sm font-semibold text-slate-800">{data.vendor.credit_cycle || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400">Vendor Type</p>
+                        {data.vendor.vendor_type ? (
+                          <span className={`inline-flex items-center mt-1 rounded-full px-2.5 py-0.5 text-xs font-bold border ${
+                            data.vendor.vendor_type === 'service'
+                              ? 'bg-violet-50 border-violet-200 text-violet-700'
+                              : data.vendor.vendor_type === 'both'
+                              ? 'bg-teal-50 border-teal-200 text-teal-700'
+                              : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                          }`}>
+                            {data.vendor.vendor_type === 'service' ? '🔧 Service' : data.vendor.vendor_type === 'both' ? '📦🔧 Both' : '📦 Product'}
+                          </span>
+                        ) : (
+                          <p className="text-sm font-semibold text-slate-800">N/A</p>
+                        )}
                       </div>
                     </div>
 
