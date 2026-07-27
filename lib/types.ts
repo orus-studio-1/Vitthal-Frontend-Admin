@@ -557,6 +557,8 @@ export interface Service {
   description?: string | null;
   category_id: string;
   category_label?: string | null;
+  subcategory_id?: string | null;
+  subcategory_name?: string | null;
   status: 'pending' | 'approved' | 'rejected';
   created_by_user_id?: string | null;
   is_active: boolean;

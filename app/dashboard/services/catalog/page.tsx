@@ -308,7 +308,10 @@ export default function ServicesPage() {
                       </span>
                     </div>
                     <p className="text-xs text-slate-500">
-                      Category: <span className="font-semibold text-slate-700">{service.category_label || 'Service'}</span>
+                      Category: <span className="font-semibold text-slate-700">
+                        {service.category_label || 'Service'}
+                        {service.subcategory_name ? ` > ${service.subcategory_name}` : ''}
+                      </span>
                     </p>
                     <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
                       {service.description || 'No description provided.'}
@@ -390,7 +393,10 @@ export default function ServicesPage() {
                           <Eye className="h-4 w-4 text-slate-400" />
                         </h3>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Category: <span className="font-semibold text-slate-700">{service.category_label || 'Unclassified'}</span> • {Number(service.vendor_count || 0)} sellers • {Number(service.booking_count || 0)} bookings
+                          Category: <span className="font-semibold text-slate-700">
+                            {service.category_label || 'Unclassified'}
+                            {service.subcategory_name ? ` > ${service.subcategory_name}` : ''}
+                          </span> • {Number(service.vendor_count || 0)} sellers • {Number(service.booking_count || 0)} bookings
                         </p>
                         <span className={`inline-block rounded-full px-2.5 py-0.5 mt-2 text-[10px] font-bold uppercase border ${
                           service.status === 'approved'
@@ -546,7 +552,10 @@ export default function ServicesPage() {
                     </div>
                     <div>
                       <span className="text-slate-400 block text-xs uppercase font-mono tracking-wider">Category</span>
-                      <span className="font-bold text-slate-800 mt-0.5 block">{selectedService.category_label || 'Unclassified'}</span>
+                      <span className="font-bold text-slate-800 mt-0.5 block">
+                        {selectedService.category_label || 'Unclassified'}
+                        {selectedService.subcategory_name ? ` > ${selectedService.subcategory_name}` : ''}
+                      </span>
                     </div>
                     <div className="col-span-2">
                       <span className="text-slate-400 block text-xs uppercase font-mono tracking-wider">Description</span>

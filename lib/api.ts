@@ -331,14 +331,26 @@ export const riderAPI = {
 
   getLiveDetails: (id: string) =>
     api.get<ApiResponse<any>>(`/api/admin/delivery-agents/${id}/live`),
+
+  getDeliveries: (id: string) =>
+    api.get<ApiResponse<any[]>>(`/api/admin/delivery-agents/${id}/deliveries`),
 };
 
 export const serviceAPI = {
   getAll: (params?: { status?: string; search?: string; page?: number; limit?: number }) =>
     api.get<ApiResponse<any>>('/api/services', { params }),
 
-  create: (data: { name: string; description?: string; categoryId: string; status?: string }) =>
-    api.post<ApiResponse<any>>('/api/services', data),
+  getSubcategories: (params?: { categoryId?: string }) =>
+    api.get<ApiResponse<any[]>>('/api/services/subcategories', { params }),
+
+  create: (data: {
+    name: string;
+    description?: string;
+    categoryId: string;
+    status?: string;
+    subcategoryId?: string;
+    newSubcategoryName?: string;
+  }) => api.post<ApiResponse<any>>('/api/services', data),
 
   update: (
     id: string,
@@ -347,6 +359,8 @@ export const serviceAPI = {
       description: string;
       categoryId: string;
       status: string;
+      subcategoryId: string | null;
+      newSubcategoryName: string;
     }>
   ) => api.put<ApiResponse<any>>(`/api/services/${id}`, data),
 

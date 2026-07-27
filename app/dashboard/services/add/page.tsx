@@ -40,6 +40,12 @@ export default function AddServicePage() {
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("approved");
 
+  const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [subcategory, setSubcategory] = useState("");
+  const [isCreatingSubcat, setIsCreatingSubcat] = useState(false);
+  const [newSubcategoryName, setNewSubcategoryName] = useState("");
+  const [isLoadingSubcats, setIsLoadingSubcats] = useState(false);
+
   // Media states (accepts single file)
   const [uploadedMedia, setUploadedMedia] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -50,6 +56,30 @@ export default function AddServicePage() {
       return;
     }
   }, [authLoading, isAuthenticated, router]);
+
+  useEffect(() => {
+    async function loadSubcats() {
+      if (!category) {
+        setSubcategories([]);
+        return;
+      }
+      setIsLoadingSubcats(true);
+      try {
+        const response = await serviceAPI.getSubcategories({ categoryId: category });
+        if (response.data?.data) {
+          setSubcategories(response.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load subcategories:", err);
+      } finally {
+        setIsLoadingSubcats(false);
+      }
+    }
+    loadSubcats();
+    setSubcategory("");
+    setIsCreatingSubcat(false);
+    setNewSubcategoryName("");
+  }, [category]);
 
   useEffect(() => {
     async function loadCats() {
@@ -116,12 +146,13 @@ export default function AddServicePage() {
     setIsSaving(true);
 
     try {
-      // 1. Create service catalog entry
       const serviceRes = await serviceAPI.create({
         name: serviceName,
         description,
         categoryId: category,
         status,
+        subcategoryId: subcategory || undefined,
+        newSubcategoryName: newSubcategoryName.trim() || undefined,
       });
 
       const finalServiceId = serviceRes.data?.data?.id;
@@ -289,6 +320,60 @@ export default function AddServicePage() {
                   <option value="pending">Pending (Needs verification)</option>
                 </select>
               </div>
+
+              {/* Subcategory Select / Create */}
+              {category && (
+                <div className="md:col-span-2 border-t border-slate-100 pt-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Subcategory
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCreatingSubcat(!isCreatingSubcat);
+                        setSubcategory("");
+                        setNewSubcategoryName("");
+                      }}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline bg-transparent border-none cursor-pointer"
+                    >
+                      {isCreatingSubcat ? "Select Existing Subcategory" : "Create New Subcategory"}
+                    </button>
+                  </div>
+
+                  {isCreatingSubcat ? (
+                    <div>
+                      <input
+                        type="text"
+                        required
+                        value={newSubcategoryName}
+                        onChange={(e) => setNewSubcategoryName(e.target.value)}
+                        placeholder="Enter new subcategory name (e.g. TV Repair)..."
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition font-medium"
+                      />
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        This subcategory will be created dynamically under the selected parent category.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <select
+                        value={subcategory}
+                        onChange={(e) => setSubcategory(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition font-medium"
+                        disabled={isLoadingSubcats}
+                      >
+                        <option value="">None (No Subcategory)</option>
+                        {subcategories.map((sub) => (
+                          <option key={sub.id} value={sub.id}>
+                            {sub.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
 
             </div>
           </section>
