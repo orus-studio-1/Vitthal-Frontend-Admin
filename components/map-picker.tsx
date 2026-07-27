@@ -49,6 +49,11 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
   const markerRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
 
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
   // Load Leaflet assets dynamically from CDN to prevent SSR/Next.js bundling issues
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -78,138 +83,108 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
     document.body.appendChild(script);
   }, []);
 
-  // Initialize Map
+  // Initialize Map ONCE when loaded
   useEffect(() => {
     if (!leafletLoaded || !mapContainerRef.current) return;
 
     const L = (window as any).L;
     if (!L) return;
 
-    // Parse coordinates, default to Pune/Mumbai if none set
+    // Parse coordinates, default to Pune if none set
     const defaultLat = parseFloat(String(latitude)) || 18.5204;
     const defaultLng = parseFloat(String(longitude)) || 73.8567;
 
-    // Check if map is already initialized
-    if (!mapRef.current) {
-      const map = L.map(mapContainerRef.current, {
-        zoomControl: true,
-        attributionControl: false
-      }).setView([defaultLat, defaultLng], 13);
+    const container = mapContainerRef.current;
 
-      // Add default tile layer
-      const style = MAP_STYLES[mapStyle];
-      tileLayerRef.current = L.tileLayer(style.url, {
-        maxZoom: 19,
-        attribution: style.attribution
-      }).addTo(map);
-
-      // Setup custom pin icon
-      const customIcon = L.divIcon({
-        html: `<div style="background-color: #d97706; width: 22px; height: 22px; border-radius: 11px; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); position: relative;">
-                 <div style="background-color: #ffffff; width: 6px; height: 6px; border-radius: 3px; position: absolute; top: 5px; left: 5px;"></div>
-               </div>`,
-        iconSize: [22, 22],
-        iconAnchor: [11, 11]
-      });
-
-      const marker = L.marker([defaultLat, defaultLng], {
-        icon: customIcon,
-        draggable: true
-      }).addTo(map);
-
-      // Handle marker drag end
-      marker.on('dragend', () => {
-        const position = marker.getLatLng();
-        onChange(Number(position.lat.toFixed(6)), Number(position.lng.toFixed(6)));
-      });
-
-      // Handle map click
-      map.on('click', (e: any) => {
-        const { lat, lng } = e.latlng;
-        marker.setLatLng([lat, lng]);
-        onChange(Number(lat.toFixed(6)), Number(lng.toFixed(6)));
-      });
-
-      mapRef.current = map;
-      markerRef.current = marker;
-    } else {
-      // If coordinates changed externally, update map and marker
-      const markerLatLng = markerRef.current.getLatLng();
-      const currentLat = parseFloat(String(latitude));
-      const currentLng = parseFloat(String(longitude));
-
-      if (currentLat && currentLng && (markerLatLng.lat !== currentLat || markerLatLng.lng !== currentLng)) {
-        markerRef.current.setLatLng([currentLat, currentLng]);
-        mapRef.current.setView([currentLat, currentLng], mapRef.current.getZoom());
+    // Clean up any stale map instance on the container element if left over
+    if (mapRef.current) {
+      try {
+        mapRef.current.off();
+        mapRef.current.remove();
+      } catch (e) {
+        // ignore
       }
-    }
-  }, [leafletLoaded, latitude, longitude, onChange]);
-
-  // Update Tile Layer dynamically when style changes
-  useEffect(() => {
-    if (!leafletLoaded || !mapRef.current) return;
-    const L = (window as any).L;
-    if (!L) return;
-
-    if (tileLayerRef.current) {
-      mapRef.current.removeLayer(tileLayerRef.current);
+      mapRef.current = null;
     }
 
+    const map = L.map(container, {
+      zoomControl: true,
+      attributionControl: false
+    }).setView([defaultLat, defaultLng], 13);
+
+    // Add default tile layer
     const style = MAP_STYLES[mapStyle];
     tileLayerRef.current = L.tileLayer(style.url, {
       maxZoom: 19,
       attribution: style.attribution
-    }).addTo(mapRef.current);
-  }, [leafletLoaded, mapStyle]);
+    }).addTo(map);
 
-  // Handle click outside to close suggestions dropdown
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+    // Setup custom pin icon
+    const customIcon = L.divIcon({
+      html: `<div style="background-color: #d97706; width: 22px; height: 22px; border-radius: 11px; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); position: relative;">
+               <div style="background-color: #ffffff; width: 6px; height: 6px; border-radius: 3px; position: absolute; top: 5px; left: 5px;"></div>
+             </div>`,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    });
 
-  // Fetch Autocomplete Suggestions as user types (debounced)
-  useEffect(() => {
-    if (!searchQuery.trim() || searchQuery.length < 3) {
-      setSuggestions([]);
-      return;
-    }
+    const marker = L.marker([defaultLat, defaultLng], {
+      icon: customIcon,
+      draggable: true
+    }).addTo(map);
 
-    const delayDebounce = setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            searchQuery
-          )}&limit=5`
-        );
-        const results = await response.json();
-        setSuggestions(results || []);
-      } catch (err) {
-        console.error('Error fetching suggestions:', err);
-      }
-    }, 450); // 450ms debounce
+    // Handle marker drag end
+    marker.on('dragend', () => {
+      if (!mapRef.current || !(mapRef.current as any)._mapPane) return;
+      const position = marker.getLatLng();
+      onChangeRef.current(Number(position.lat.toFixed(6)), Number(position.lng.toFixed(6)));
+    });
 
-    return () => clearTimeout(delayDebounce);
-  }, [searchQuery]);
+    // Handle map click
+    map.on('click', (e: any) => {
+      if (!mapRef.current || !(mapRef.current as any)._mapPane) return;
+      const { lat, lng } = e.latlng;
+      marker.setLatLng([lat, lng]);
+      onChangeRef.current(Number(lat.toFixed(6)), Number(lng.toFixed(6)));
+    });
 
-  // Clean up map instance on unmount
-  useEffect(() => {
+    mapRef.current = map;
+    markerRef.current = marker;
+
     return () => {
       if (mapRef.current) {
-        mapRef.current.remove();
+        try {
+          mapRef.current.off();
+          mapRef.current.remove();
+        } catch (e) {
+          // ignore cleanup errors
+        }
         mapRef.current = null;
         markerRef.current = null;
         tileLayerRef.current = null;
       }
     };
-  }, []);
+  }, [leafletLoaded]);
+
+  // Update marker and map view when latitude/longitude props change externally
+  useEffect(() => {
+    if (!mapRef.current || !markerRef.current || !(mapRef.current as any)._mapPane) return;
+
+    const currentLat = parseFloat(String(latitude));
+    const currentLng = parseFloat(String(longitude));
+
+    if (!isNaN(currentLat) && !isNaN(currentLng)) {
+      const markerLatLng = markerRef.current.getLatLng();
+      const diffLat = Math.abs(markerLatLng.lat - currentLat);
+      const diffLng = Math.abs(markerLatLng.lng - currentLng);
+
+      // Only update map view if location changed significantly (> ~10 meters)
+      if (diffLat > 0.0001 || diffLng > 0.0001) {
+        markerRef.current.setLatLng([currentLat, currentLng]);
+        mapRef.current.setView([currentLat, currentLng], mapRef.current.getZoom(), { animate: false });
+      }
+    }
+  }, [latitude, longitude]);
 
   // Geolocation API to get current location
   const handleUseCurrentLocation = () => {
@@ -225,10 +200,10 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
       (position) => {
         const lat = Number(position.coords.latitude.toFixed(6));
         const lng = Number(position.coords.longitude.toFixed(6));
-        onChange(lat, lng);
+        onChangeRef.current(lat, lng);
         setGeolocating(false);
 
-        if (mapRef.current && markerRef.current) {
+        if (mapRef.current && markerRef.current && (mapRef.current as any)._mapPane) {
           markerRef.current.setLatLng([lat, lng]);
           mapRef.current.setView([lat, lng], 15);
         }
@@ -249,9 +224,9 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
 
     setSearchQuery(item.display_name);
     setShowSuggestions(false);
-    onChange(lat, lng);
+    onChangeRef.current(lat, lng);
 
-    if (mapRef.current && markerRef.current) {
+    if (mapRef.current && markerRef.current && (mapRef.current as any)._mapPane) {
       markerRef.current.setLatLng([lat, lng]);
       mapRef.current.setView([lat, lng], 15);
     }
@@ -277,9 +252,9 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
       if (results && results.length > 0) {
         const lat = Number(parseFloat(results[0].lat).toFixed(6));
         const lng = Number(parseFloat(results[0].lon).toFixed(6));
-        onChange(lat, lng);
+        onChangeRef.current(lat, lng);
 
-        if (mapRef.current && markerRef.current) {
+        if (mapRef.current && markerRef.current && (mapRef.current as any)._mapPane) {
           markerRef.current.setLatLng([lat, lng]);
           mapRef.current.setView([lat, lng], 15);
         }

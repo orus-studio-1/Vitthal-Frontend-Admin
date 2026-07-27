@@ -11,6 +11,7 @@ import { extractApiError, fulfillmentCenterAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { FulfillmentCenter } from '../../../lib/types';
 import dynamic from 'next/dynamic';
+import { toast } from 'sonner';
 
 const MapPicker = dynamic(() => import('../../../components/map-picker'), {
   ssr: false,
@@ -85,7 +86,9 @@ export default function FulfillmentCentersPage() {
       const response = await fulfillmentCenterAPI.getAll();
       setCenters(response.data.data);
     } catch (err) {
-      setError(extractApiError(err, 'Failed to load fulfillment centers'));
+      const msg = extractApiError(err, 'Failed to load fulfillment centers');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -167,6 +170,7 @@ export default function FulfillmentCentersPage() {
         longitude: formData.longitude ? Number(formData.longitude) : undefined,
         total_area_sqft: formData.total_area_sqft ? Number(formData.total_area_sqft) : undefined,
         capacity_packages: formData.capacity_packages ? Number(formData.capacity_packages) : undefined,
+        capacity: formData.capacity_packages ? Number(formData.capacity_packages) : undefined,
       };
 
       if (editingCenter) {
@@ -175,16 +179,22 @@ export default function FulfillmentCentersPage() {
           delete (payload as any).password;
         }
         await fulfillmentCenterAPI.update(editingCenter.id, payload);
-        setSuccess('Fulfillment center updated successfully.');
+        const msg = 'Fulfillment center updated successfully.';
+        setSuccess(msg);
+        toast.success(msg);
       } else {
         await fulfillmentCenterAPI.create(payload);
-        setSuccess('Fulfillment center created successfully with login user details.');
+        const msg = 'Fulfillment center created successfully with login user details.';
+        setSuccess(msg);
+        toast.success(msg);
       }
 
       setIsFormOpen(false);
       await fetchCenters();
     } catch (err) {
-      setError(extractApiError(err, 'Failed to save fulfillment center'));
+      const msg = extractApiError(err, 'Failed to save fulfillment center');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -196,11 +206,15 @@ export default function FulfillmentCentersPage() {
       setLoading(true);
       setError('');
       await fulfillmentCenterAPI.delete(deletingCenter.id);
-      setSuccess('Fulfillment center deleted successfully.');
+      const msg = 'Fulfillment center deleted successfully.';
+      setSuccess(msg);
+      toast.success(msg);
       setDeletingCenter(null);
       await fetchCenters();
     } catch (err) {
-      setError(extractApiError(err, 'Failed to delete fulfillment center'));
+      const msg = extractApiError(err, 'Failed to delete fulfillment center');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -430,6 +444,12 @@ export default function FulfillmentCentersPage() {
             </div>
 
             <form onSubmit={handleFormSubmit} className="space-y-6">
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-semibold text-red-700">
+                  {error}
+                </div>
+              )}
+
               {/* Account Credentials */}
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-amber-600 border-b border-slate-100 pb-2">Account Login details</h3>
@@ -440,7 +460,7 @@ export default function FulfillmentCentersPage() {
                       type="email"
                       required
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                       placeholder="e.g. pune-hub@mtwo.in"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -453,7 +473,7 @@ export default function FulfillmentCentersPage() {
                       type="password"
                       required={!editingCenter}
                       value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                       placeholder="Enter secure password"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -471,7 +491,7 @@ export default function FulfillmentCentersPage() {
                       type="text"
                       required
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                       placeholder="e.g. Pune Main Hub"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -482,7 +502,7 @@ export default function FulfillmentCentersPage() {
                       type="text"
                       required
                       value={formData.code}
-                      onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))}
                       placeholder="e.g. FC-PUNE-01"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 uppercase transition"
                     />
@@ -492,7 +512,7 @@ export default function FulfillmentCentersPage() {
                     <input
                       type="text"
                       value={formData.manager_name}
-                      onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, manager_name: e.target.value }))}
                       placeholder="Hub Manager"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -502,7 +522,7 @@ export default function FulfillmentCentersPage() {
                     <input
                       type="text"
                       value={formData.contact_phone}
-                      onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, contact_phone: e.target.value }))}
                       placeholder="Phone number"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -512,7 +532,7 @@ export default function FulfillmentCentersPage() {
                     <input
                       type="email"
                       value={formData.contact_email}
-                      onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, contact_email: e.target.value }))}
                       placeholder="Secondary contact email"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -529,7 +549,7 @@ export default function FulfillmentCentersPage() {
                     <input
                       type="number"
                       value={formData.total_area_sqft}
-                      onChange={(e) => setFormData({ ...formData, total_area_sqft: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, total_area_sqft: e.target.value }))}
                       placeholder="e.g. 5000"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -539,7 +559,7 @@ export default function FulfillmentCentersPage() {
                     <input
                       type="number"
                       value={formData.capacity_packages}
-                      onChange={(e) => setFormData({ ...formData, capacity_packages: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, capacity_packages: e.target.value }))}
                       placeholder="e.g. 10000"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -548,7 +568,7 @@ export default function FulfillmentCentersPage() {
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Storage Type</label>
                     <select
                       value={formData.storage_type}
-                      onChange={(e) => setFormData({ ...formData, storage_type: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, storage_type: e.target.value }))}
                       className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     >
                       {STORAGE_TYPES.map(type => (
@@ -561,7 +581,7 @@ export default function FulfillmentCentersPage() {
                     <input
                       type="text"
                       value={formData.operating_hours}
-                      onChange={(e) => setFormData({ ...formData, operating_hours: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, operating_hours: e.target.value }))}
                       placeholder="e.g. 24/7 or 09:00 - 18:00"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -579,7 +599,7 @@ export default function FulfillmentCentersPage() {
                       type="text"
                       required
                       value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
                       placeholder="Street address / Landmark"
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                     />
@@ -591,7 +611,7 @@ export default function FulfillmentCentersPage() {
                         type="text"
                         required
                         value={formData.city}
-                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
                         placeholder="City"
                         className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                       />
@@ -602,7 +622,7 @@ export default function FulfillmentCentersPage() {
                         type="text"
                         required
                         value={formData.state}
-                        onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
                         placeholder="State"
                         className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                       />
@@ -614,7 +634,7 @@ export default function FulfillmentCentersPage() {
                         required
                         pattern="^[0-9]{6}$"
                         value={formData.pincode}
-                        onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, pincode: e.target.value }))}
                         placeholder="Pincode"
                         className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                       />
@@ -625,7 +645,7 @@ export default function FulfillmentCentersPage() {
                         type="text"
                         required
                         value={formData.country}
-                        onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, country: e.target.value }))}
                         className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                       />
                     </div>
@@ -637,7 +657,7 @@ export default function FulfillmentCentersPage() {
                     <MapPicker
                       latitude={formData.latitude}
                       longitude={formData.longitude}
-                      onChange={(lat, lng) => setFormData({ ...formData, latitude: String(lat), longitude: String(lng) })}
+                      onChange={(lat, lng) => setFormData(prev => ({ ...prev, latitude: String(lat), longitude: String(lng) }))}
                     />
                   </div>
 
@@ -648,7 +668,7 @@ export default function FulfillmentCentersPage() {
                         type="number"
                         step="any"
                         value={formData.latitude}
-                        onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
                         placeholder="e.g. 18.5204"
                         className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                       />
@@ -659,7 +679,7 @@ export default function FulfillmentCentersPage() {
                         type="number"
                         step="any"
                         value={formData.longitude}
-                        onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
                         placeholder="e.g. 73.8567"
                         className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-500 transition"
                       />
@@ -668,7 +688,7 @@ export default function FulfillmentCentersPage() {
                       <label className="block text-xs font-semibold text-slate-500 mb-1">Operating Status</label>
                       <select
                         value={formData.status}
-                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
                         className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-amber-500 capitalize transition"
                       >
                         <option value="active">Active</option>
