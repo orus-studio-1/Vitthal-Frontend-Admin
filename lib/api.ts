@@ -334,6 +334,9 @@ export const riderAPI = {
 
   getDeliveries: (id: string) =>
     api.get<ApiResponse<any[]>>(`/api/admin/delivery-agents/${id}/deliveries`),
+
+  updateKYCStatus: (id: string, status: 'approved' | 'rejected', rejectionReason?: string) =>
+    api.patch<ApiResponse<any>>(`/api/admin/delivery-agents/${id}/kyc-status`, { status, rejectionReason }),
 };
 
 export const serviceAPI = {

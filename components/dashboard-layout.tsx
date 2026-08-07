@@ -22,6 +22,7 @@ import {
   MapPin,
   Bike,
   Wrench,
+  ShieldCheck,
 } from 'lucide-react';
 
 const navigation = [
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Vendors', href: '/dashboard/vendors', icon: Building2 },
   { name: 'Fulfillment Centers', href: '/dashboard/fulfillment-centers', icon: MapPin },
   { name: 'Rider Partners', href: '/dashboard/riders', icon: Bike },
+  { name: 'KYC Approvals', href: '/dashboard/kyc-approvals', icon: ShieldCheck },
   { name: 'Vendor Chat', href: '/dashboard/vendor-chat', icon: MessageSquare },
   { name: 'Quotations', href: '/dashboard/quotations', icon: FileText },
   { name: 'Client Quotations', href: '/dashboard/client-quotations', icon: FileText },

@@ -15,10 +15,6 @@ export default function ClientQuotationsAdminPage() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    loadQuotations();
-  }, []);
-
   const loadQuotations = async () => {
     try {
       const res = await clientQuotationAPI.getAll();
@@ -29,6 +25,10 @@ export default function ClientQuotationsAdminPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadQuotations();
+  }, []);
 
   const handleSendConfirmation = async (id: string) => {
     if (!message.trim()) {

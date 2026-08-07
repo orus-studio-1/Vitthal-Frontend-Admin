@@ -87,6 +87,21 @@ export default function OrdersPage() {
     }
   }, [authLoading, isAuthenticated, router]);
 
+  const openOrderDetail = async (orderId: string) => {
+    try {
+      setSelectedOrderId(orderId);
+      setDetailLoading(true);
+      setDetailError('');
+      setOrderDetail(null);
+      const response = await orderAPI.getById(orderId);
+      setOrderDetail(response.data.data);
+    } catch (detailLoadError) {
+      setDetailError(extractApiError(detailLoadError, 'Failed to load order details'));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const orderId = new URLSearchParams(window.location.search).get('orderId');
@@ -234,21 +249,6 @@ export default function OrdersPage() {
       await loadData();
     } catch (updateError) {
       setError(extractApiError(updateError, 'Failed to update order status'));
-    }
-  };
-
-  const openOrderDetail = async (orderId: string) => {
-    try {
-      setSelectedOrderId(orderId);
-      setDetailLoading(true);
-      setDetailError('');
-      setOrderDetail(null);
-      const response = await orderAPI.getById(orderId);
-      setOrderDetail(response.data.data);
-    } catch (detailLoadError) {
-      setDetailError(extractApiError(detailLoadError, 'Failed to load order details'));
-    } finally {
-      setDetailLoading(false);
     }
   };
 

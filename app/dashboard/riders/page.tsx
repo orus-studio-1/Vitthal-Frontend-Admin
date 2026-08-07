@@ -30,6 +30,14 @@ interface DeliveryAgent {
   vehicle_number: string | null;
   status: string;
   is_online: boolean;
+  kyc_status?: 'pending' | 'submitted' | 'approved' | 'rejected';
+  id_doc_type?: string | null;
+  id_doc_number?: string | null;
+  id_doc_image_url?: string | null;
+  bank_name?: string | null;
+  account_number?: string | null;
+  ifsc_code?: string | null;
+  account_holder_name?: string | null;
   created_at: string;
   rider_name: string;
   rider_email: string;
@@ -47,6 +55,18 @@ export default function RidersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const handleApproveKYC = async (riderId: string, status: 'approved' | 'rejected') => {
+    try {
+      setError('');
+      setSuccess('');
+      await riderAPI.updateKYCStatus(riderId, status);
+      setSuccess(`Rider KYC has been marked as ${status}.`);
+      fetchData();
+    } catch (err: any) {
+      setError(extractApiError(err, 'Failed to update rider KYC status.'));
+    }
+  };
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [trackingRiderId, setTrackingRiderId] = useState<string | null>(null);
@@ -210,6 +230,20 @@ export default function RidersPage() {
               <span className="text-3xl font-semibold tracking-tight text-slate-900">{stats.total}</span>
             </div>
           </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-6 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+              <ShieldAlert className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+              Pending KYC Review
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-3xl font-bold tracking-tight text-amber-700">
+                {riders.filter((r) => r.kyc_status === 'submitted').length}
+              </span>
+              <span className="text-xs font-semibold text-amber-600">action required</span>
+            </div>
+          </div>
+
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="text-xs font-medium uppercase tracking-wider text-slate-500">Online On Shift</div>
             <div className="mt-2 flex items-baseline gap-2">
@@ -217,12 +251,7 @@ export default function RidersPage() {
               <span className="text-xs text-slate-500">active</span>
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wider text-slate-500">Approved Accounts</div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-semibold tracking-tight text-slate-900">{stats.active}</span>
-            </div>
-          </div>
+
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Deliveries Done</div>
             <div className="mt-2 flex items-baseline gap-2">
@@ -281,6 +310,7 @@ export default function RidersPage() {
                     <th className="px-6 py-4">Agent Name</th>
                     <th className="px-6 py-4">Contact Phone</th>
                     <th className="px-6 py-4">Vehicle Details</th>
+                    <th className="px-6 py-4">KYC Status</th>
                     <th className="px-6 py-4">Attached Hub</th>
                     <th className="px-6 py-4 text-center">Deliveries Done</th>
                     <th className="px-6 py-4">Shift Status</th>
@@ -317,6 +347,23 @@ export default function RidersPage() {
                         <div className="text-xs text-slate-500 mt-0.5">{rider.vehicle_number || 'No plate record'}</div>
                       </td>
                       <td className="px-6 py-4">
+                        {rider.kyc_status === 'approved' ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                            KYC Approved
+                          </span>
+                        ) : rider.kyc_status === 'submitted' ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1 text-xs font-bold text-amber-700 animate-pulse">
+                            <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                            Pending Review
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500">
+                            Pending Submission
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <div className="flex items-start gap-1">
                           <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
                           <div>
@@ -350,6 +397,32 @@ export default function RidersPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {rider.kyc_status === 'submitted' && (
+                            <>
+                              {rider.id_doc_image_url && (
+                                <a
+                                  href={rider.id_doc_image_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition"
+                                >
+                                  View Doc ↗
+                                </a>
+                              )}
+                              <button
+                                onClick={() => handleApproveKYC(rider.id, 'approved')}
+                                className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-sm"
+                              >
+                                Approve KYC
+                              </button>
+                              <button
+                                onClick={() => handleApproveKYC(rider.id, 'rejected')}
+                                className="inline-flex items-center gap-1 rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-700 transition cursor-pointer shadow-sm"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
                           <button
                             onClick={() => handleOpenRiderDeliveries(rider)}
                             className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
