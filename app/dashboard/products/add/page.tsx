@@ -615,6 +615,8 @@ export default function AddProductPage() {
                     <p className="mt-2 text-[11px] text-slate-500">Saved product types appear here immediately and become available globally after the product is created.</p>
                   </div>
                 ) : null}
+              </div>
+
             </div>
           </section>
 
