@@ -27,6 +27,8 @@ import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, productAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { Product } from '../../../lib/types';
+import { NotionEditor } from '../../../components/notion-editor/NotionEditor';
+import { RichDescriptionRenderer } from '../../../components/notion-editor/RichDescriptionRenderer';
 
 // Type for pending vendor listings from /api/products/pending-vendor/all
 interface PendingVendorListing {
@@ -814,14 +816,19 @@ export default function ProductsPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                        Description
-                      </label>
-                      <textarea
-                        rows={3}
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                          Description &amp; Specifications
+                        </label>
+                        <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                          Notion / Sanity Editor
+                        </span>
+                      </div>
+                      <NotionEditor
                         value={editDescription}
-                        onChange={(e) => setEditDescription(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                        onChange={setEditDescription}
+                        placeholder="Type '/' for commands or start writing product specifications..."
+                        minHeight="min-h-[220px]"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -956,11 +963,11 @@ export default function ProductsPage() {
                     </div>
                     <div>
                       <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
-                        Description
+                        Description &amp; Specifications
                       </span>
-                      <p className="text-slate-600 mt-1 leading-relaxed">
-                        {selectedProduct.description || 'No description provided for catalog.'}
-                      </p>
+                      <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+                        <RichDescriptionRenderer content={selectedProduct.description} />
+                      </div>
                     </div>
                     {((selectedProduct.attributes && Object.keys(selectedProduct.attributes).length > 0) ||
                       selectedProduct.material ||

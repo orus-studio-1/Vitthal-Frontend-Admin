@@ -24,6 +24,7 @@ import {
 import DashboardLayout from '../../../../components/dashboard-layout';
 import { extractApiError, productAPI } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth-context';
+import { NotionEditor } from '../../../../components/notion-editor/NotionEditor';
 
 type SpecificationDraft = {
   id: string;
@@ -614,9 +615,29 @@ export default function AddProductPage() {
                     <p className="mt-2 text-[11px] text-slate-500">Saved product types appear here immediately and become available globally after the product is created.</p>
                   </div>
                 ) : null}
-              </div>
-
             </div>
+          </section>
+
+          {/* Product Description & Technical Documentation */}
+          <section className="bg-white rounded-[1.75rem] border border-slate-200 p-6 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Product Description &amp; Documentation</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Create rich product documentation with headings, bullet lists, specification tables, and callout boxes. Type <code className="bg-slate-100 px-1 rounded text-blue-700 font-mono">/</code> for quick blocks.
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100 shadow-3xs">
+                Notion / Sanity Editor
+              </span>
+            </div>
+
+            <NotionEditor
+              value={description}
+              onChange={setDescription}
+              placeholder="Type '/' to insert headings, spec tables, callouts, or pick an industrial template..."
+              minHeight="min-h-[260px]"
+            />
           </section>
 
           {/* Key Properties (Attributes) */}
