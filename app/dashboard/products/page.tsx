@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CheckCircle2,
@@ -21,7 +21,8 @@ import {
   AlertCircle,
   BellRing,
   ArrowUpRight,
-  Plus
+  Plus,
+  Upload
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, productAPI } from '../../../lib/api';
@@ -49,6 +50,11 @@ interface PendingVendorListing {
   vendor_user_email: string;
   gst_percentage?: number;
 }
+
+type EditorRow = { id: string; key: string; value: string };
+type VariantEditor = { id: string; persistedId?: string; name: string; sku: string; properties: EditorRow[] };
+
+const editorId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function ProductsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -99,6 +105,39 @@ export default function ProductsPage() {
   const [editCategory, setEditCategory] = useState('');
   const [editProductType, setEditProductType] = useState('');
   const [editAttributes, setEditAttributes] = useState<{ id: string; key: string; value: string; }[]>([]);
+  const [editItemCode, setEditItemCode] = useState('');
+  const [editQuotationLimit, setEditQuotationLimit] = useState('');
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [specificationDrafts, setSpecificationDrafts] = useState<EditorRow[]>([]);
+  const [variantDrafts, setVariantDrafts] = useState<VariantEditor[]>([]);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [mutationBusy, setMutationBusy] = useState('');
+  const mediaInputRef = useRef<HTMLInputElement | null>(null);
+
+  const hydrateEditor = (product: Product) => {
+    setEditName(product.name || '');
+    setEditDescription(product.description || '');
+    setEditCategory(product.category || '');
+    setEditProductType(product.product_type || '');
+    setEditItemCode(product.item_code || '');
+    setEditQuotationLimit(product.quotation_limit ? String(product.quotation_limit) : '');
+    setEditIsActive(product.is_active !== false);
+    setEditAttributes(Object.entries(product.attributes || {}).map(([key, value]) => ({
+      id: editorId('attr'), key, value: String(value ?? ''),
+    })));
+    setSpecificationDrafts((product.detailed_specifications || []).map((spec) => ({
+      id: spec.id, key: spec.spec_key, value: spec.spec_value || '',
+    })));
+    setVariantDrafts((product.variants || []).map((variant) => ({
+      id: variant.id,
+      persistedId: variant.id,
+      name: variant.name || '',
+      sku: variant.sku || '',
+      properties: Object.entries(variant.properties || {}).map(([key, value]) => ({
+        id: editorId('variant-property'), key, value: String(value ?? ''),
+      })),
+    })));
+  };
 
   async function fetchProducts() {
     try {
@@ -173,34 +212,12 @@ export default function ProductsPage() {
       setDrawerLoading(true);
       setEditMode(false);
 
-      // Initialize form fields
-      setEditName(product.name || '');
-      setEditDescription(product.description || '');
-      setEditCategory(product.category || '');
-      setEditProductType(product.product_type || '');
-      setEditAttributes([]);
+      hydrateEditor(product);
 
       const response = await productAPI.getById(product.id);
       const fetchedProduct = response.data.data;
       setSelectedProduct(fetchedProduct);
-
-      const initialAttrs: { id: string; key: string; value: string; }[] = [];
-      if (fetchedProduct.attributes) {
-        Object.entries(fetchedProduct.attributes).forEach(([k, v]) => {
-          initialAttrs.push({
-            id: `attr-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            key: k,
-            value: String(v),
-          });
-        });
-      } else {
-        // Fallbacks
-        if (fetchedProduct.material) initialAttrs.push({ id: 'material', key: 'Material', value: fetchedProduct.material });
-        if (fetchedProduct.grade) initialAttrs.push({ id: 'grade', key: 'Grade', value: fetchedProduct.grade });
-        if (fetchedProduct.application) initialAttrs.push({ id: 'application', key: 'Application', value: fetchedProduct.application });
-        if (fetchedProduct.standard) initialAttrs.push({ id: 'standard', key: 'Standard', value: fetchedProduct.standard });
-      }
-      setEditAttributes(initialAttrs);
+      hydrateEditor(fetchedProduct);
     } catch (err) {
       setError(extractApiError(err, 'Failed to load product details'));
     } finally {
@@ -212,6 +229,7 @@ export default function ProductsPage() {
     try {
       const response = await productAPI.getById(id);
       setSelectedProduct(response.data.data);
+      hydrateEditor(response.data.data);
       await fetchProducts();
     } catch (err) {
       setError(extractApiError(err, 'Failed to refresh product details'));
@@ -231,21 +249,15 @@ export default function ProductsPage() {
         }
       });
 
-      const materialVal = attributesPayload["Material"] || attributesPayload["material"] || "";
-      const gradeVal = attributesPayload["Grade"] || attributesPayload["grade"] || "";
-      const applicationVal = attributesPayload["Application"] || attributesPayload["application"] || "";
-      const standardVal = attributesPayload["Standard"] || attributesPayload["standard"] || "";
-
       await productAPI.update(selectedProduct.id, {
         name: editName,
         description: editDescription,
         category: editCategory,
         productType: editProductType,
         attributes: attributesPayload,
-        material: materialVal,
-        grade: gradeVal,
-        application: applicationVal,
-        standard: standardVal,
+        itemCode: editItemCode.trim() || null,
+        quotationLimit: editQuotationLimit ? Number(editQuotationLimit) : null,
+        is_active: editIsActive,
       });
       setEditMode(false);
       await handleRefreshDrawer(selectedProduct.id);
@@ -256,13 +268,103 @@ export default function ProductsPage() {
     }
   };
 
-  const handleReviewSpec = async (specId: string, decision: 'approved' | 'rejected') => {
+  const saveSpecifications = async () => {
     if (!selectedProduct) return;
+    const specifications = specificationDrafts
+      .map(({ key, value }) => ({ key: key.trim(), value: value.trim() }))
+      .filter(({ key }) => key);
     try {
-      await productAPI.reviewSpecification(specId, decision);
+      setMutationBusy('specifications');
+      setError('');
+      await productAPI.replaceSpecifications(selectedProduct.id, specifications);
       await handleRefreshDrawer(selectedProduct.id);
     } catch (err) {
-      setError(extractApiError(err, `Failed to ${decision} specification`));
+      setError(extractApiError(err, 'Failed to update specifications'));
+    } finally {
+      setMutationBusy('');
+    }
+  };
+
+  const uploadMedia = async () => {
+    if (!selectedProduct || !mediaFiles.length) return;
+    try {
+      setMutationBusy('media');
+      setError('');
+      const formData = new FormData();
+      formData.append('productId', selectedProduct.id);
+      mediaFiles.forEach((file) => formData.append('images', file));
+      await productAPI.uploadProductImages(formData);
+      setMediaFiles([]);
+      if (mediaInputRef.current) mediaInputRef.current.value = '';
+      await handleRefreshDrawer(selectedProduct.id);
+    } catch (err) {
+      setError(extractApiError(err, 'Failed to upload product images'));
+    } finally {
+      setMutationBusy('');
+    }
+  };
+
+  const deleteMedia = async (imageId: string) => {
+    if (!selectedProduct || !confirm('Delete this image permanently?')) return;
+    try {
+      setMutationBusy(`image-${imageId}`);
+      await productAPI.deleteProductImage(imageId);
+      await handleRefreshDrawer(selectedProduct.id);
+    } catch (err) {
+      setError(extractApiError(err, 'Failed to delete image'));
+    } finally {
+      setMutationBusy('');
+    }
+  };
+
+  const makePrimary = async (imageId: string) => {
+    if (!selectedProduct) return;
+    try {
+      setMutationBusy(`image-${imageId}`);
+      await productAPI.setPrimaryImage(selectedProduct.id, imageId);
+      await handleRefreshDrawer(selectedProduct.id);
+    } catch (err) {
+      setError(extractApiError(err, 'Failed to set primary image'));
+    } finally {
+      setMutationBusy('');
+    }
+  };
+
+  const saveVariant = async (variant: VariantEditor) => {
+    if (!selectedProduct) return;
+    const properties = Object.fromEntries(variant.properties
+      .map(({ key, value }) => [key.trim(), value.trim()])
+      .filter(([key]) => key));
+    try {
+      setMutationBusy(`variant-${variant.id}`);
+      if (variant.persistedId) {
+        await productAPI.updateProductVariant(variant.persistedId, { name: variant.name.trim() || null, sku: variant.sku.trim() || null, properties });
+      } else {
+        await productAPI.addProductVariant({ productId: selectedProduct.id, name: variant.name.trim() || null, sku: variant.sku.trim() || null, properties });
+      }
+      await handleRefreshDrawer(selectedProduct.id);
+    } catch (err) {
+      setError(extractApiError(err, 'Failed to save variant'));
+    } finally {
+      setMutationBusy('');
+    }
+  };
+
+  const deleteVariant = async (variant: VariantEditor) => {
+    if (!selectedProduct) return;
+    if (!variant.persistedId) {
+      setVariantDrafts((current) => current.filter((item) => item.id !== variant.id));
+      return;
+    }
+    if (!confirm('Delete this product variant?')) return;
+    try {
+      setMutationBusy(`variant-${variant.id}`);
+      await productAPI.deleteProductVariant(variant.persistedId);
+      await handleRefreshDrawer(selectedProduct.id);
+    } catch (err) {
+      setError(extractApiError(err, 'Failed to delete variant'));
+    } finally {
+      setMutationBusy('');
     }
   };
 
@@ -815,6 +917,16 @@ export default function ProductsPage() {
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Item Code</label>
+                        <input value={editItemCode} onChange={(e) => setEditItemCode(e.target.value)} placeholder="Optional catalog code" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Quotation Limit</label>
+                        <input type="number" min="1" value={editQuotationLimit} onChange={(e) => setEditQuotationLimit(e.target.value)} placeholder="No limit" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm" />
+                      </div>
+                    </div>
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -831,6 +943,11 @@ export default function ProductsPage() {
                         minHeight="min-h-[220px]"
                       />
                     </div>
+
+                    <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                      Active in catalog
+                      <input type="checkbox" checked={editIsActive} onChange={(e) => setEditIsActive(e.target.checked)} className="h-4 w-4 accent-blue-700" />
+                    </label>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
@@ -1050,6 +1167,24 @@ export default function ProductsPage() {
                   </span>
                 </div>
 
+                <div className="mb-4 rounded-xl border border-dashed border-amber-300 bg-amber-50/40 p-3">
+                  <input
+                    ref={mediaInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    onChange={(event) => setMediaFiles(Array.from(event.target.files || []).slice(0, 5))}
+                    className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:font-semibold file:text-amber-700"
+                  />
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-slate-500">JPG, PNG or WEBP · up to 5 MB each · maximum 5 per upload</span>
+                    <button type="button" onClick={uploadMedia} disabled={!mediaFiles.length || mutationBusy === 'media'} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">
+                      {mutationBusy === 'media' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      Upload {mediaFiles.length || ''}
+                    </button>
+                  </div>
+                </div>
+
                 {selectedProduct.detailed_images?.length ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {selectedProduct.detailed_images.map((img) => (
@@ -1084,7 +1219,10 @@ export default function ProductsPage() {
                           </span>
                         </div>
                         
-                        <div className="mt-2 flex gap-1 justify-end">
+                        <div className="mt-2 grid grid-cols-2 gap-1">
+                          <button onClick={() => makePrimary(img.id)} disabled={img.is_primary || mutationBusy === `image-${img.id}`} className="col-span-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-bold disabled:opacity-50">
+                            {img.is_primary ? 'Primary image' : 'Set as primary'}
+                          </button>
                           <button
                             onClick={() => handleReviewImage(img.id, 'approved')}
                             disabled={img.approval_status === 'approved'}
@@ -1098,6 +1236,9 @@ export default function ProductsPage() {
                             className="flex-1 py-1 rounded bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-bold transition disabled:opacity-50"
                           >
                             Reject
+                          </button>
+                          <button onClick={() => deleteMedia(img.id)} disabled={mutationBusy === `image-${img.id}`} className="col-span-2 py-1 rounded bg-slate-100 hover:bg-red-50 text-red-600 text-[10px] font-bold disabled:opacity-50">
+                            Delete image
                           </button>
                         </div>
                       </div>
@@ -1120,50 +1261,20 @@ export default function ProductsPage() {
                   </span>
                 </div>
 
-                {selectedProduct.detailed_specifications?.length ? (
-                  <div className="space-y-3">
-                    {selectedProduct.detailed_specifications.map((spec) => (
-                      <div
-                        key={spec.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-slate-150 bg-slate-50/50"
-                      >
-                        <div className="space-y-0.5">
-                          <span className="text-xs font-semibold text-slate-400 uppercase font-mono">
-                            {spec.spec_key}
-                          </span>
-                          <p className="font-bold text-slate-800 text-sm">{spec.spec_value}</p>
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase border ${
-                            spec.approval_status === 'approved'
-                              ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                              : spec.approval_status === 'rejected'
-                              ? 'bg-red-50 border-red-100 text-red-700'
-                              : 'bg-amber-50 border-amber-100 text-amber-700'
-                          }`}>
-                            {spec.approval_status}
-                          </span>
-                        </div>
-                        <div className="mt-2 sm:mt-0 flex gap-1.5">
-                          <button
-                            onClick={() => handleReviewSpec(spec.id, 'approved')}
-                            disabled={spec.approval_status === 'approved'}
-                            className="px-2.5 py-1.5 rounded-lg border border-emerald-100 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold transition disabled:opacity-50"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => handleReviewSpec(spec.id, 'rejected')}
-                            disabled={spec.approval_status === 'rejected'}
-                            className="px-2.5 py-1.5 rounded-lg border border-red-100 text-red-600 bg-red-50 hover:bg-red-100 text-xs font-semibold transition disabled:opacity-50"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                <div className="space-y-2">
+                  {specificationDrafts.map((spec, index) => (
+                    <div key={spec.id} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
+                      <input value={spec.key} onChange={(e) => setSpecificationDrafts((rows) => rows.map((row, i) => i === index ? { ...row, key: e.target.value } : row))} placeholder="Specification" className="rounded-lg border border-slate-200 px-3 py-2 text-xs" />
+                      <input value={spec.value} onChange={(e) => setSpecificationDrafts((rows) => rows.map((row, i) => i === index ? { ...row, value: e.target.value } : row))} placeholder="Value" className="rounded-lg border border-slate-200 px-3 py-2 text-xs" />
+                      <button type="button" onClick={() => setSpecificationDrafts((rows) => rows.filter((_, i) => i !== index))} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                  {!specificationDrafts.length && <p className="py-3 text-center text-xs text-slate-400">No product specifications.</p>}
+                  <div className="flex justify-between pt-2">
+                    <button type="button" onClick={() => setSpecificationDrafts((rows) => [...rows, { id: editorId('spec'), key: '', value: '' }])} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold"><Plus className="h-3.5 w-3.5" /> Add specification</button>
+                    <button type="button" onClick={saveSpecifications} disabled={mutationBusy === 'specifications'} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{mutationBusy === 'specifications' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save specifications</button>
                   </div>
-                ) : (
-                  <p className="text-slate-400 text-xs py-4 text-center">No product specifications.</p>
-                )}
+                </div>
               </section>
 
               {/* Product Variants Drawer Section */}
@@ -1178,72 +1289,38 @@ export default function ProductsPage() {
                   </span>
                 </div>
 
-                {selectedProduct.variants?.length ? (
-                  <div className="space-y-4">
-                    {selectedProduct.variants.map((v) => (
-                      <div
-                        key={v.id}
-                        className="rounded-xl border border-slate-200 bg-white p-4 space-y-3"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                              {Object.entries(v.properties || {})
-                                .map(([key, val]) => `${key}: ${val}`)
-                                .join(', ') || 'Default Variant'}
-                            </span>
-                            {v.sku && (
-                              <p className="text-xs text-slate-500 mt-1 font-mono">
-                                SKU: {v.sku}
-                              </p>
-                            )}
-                            {v.creator_name && (
-                              <p className="text-[11px] text-slate-400 mt-0.5">
-                                Creator: {v.creator_name} ({v.creator_email})
-                              </p>
-                            )}
-                          </div>
-                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${
-                            v.approval_status === 'approved'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                              : v.approval_status === 'rejected'
-                              ? 'bg-red-100 text-red-800 border border-red-200'
-                              : 'bg-amber-100 text-amber-800 border border-amber-200'
-                          }`}>
-                            {v.approval_status}
-                          </span>
-                        </div>
-
-                        {v.approval_notes && (
-                          <p className="text-xs italic text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                            Notes: {v.approval_notes}
-                          </p>
-                        )}
-
-                        {v.approval_status === 'pending' && (
-                          <div className="flex gap-2 pt-1 justify-end">
-                            <button
-                              onClick={() => handleReviewVariant(v.id, 'approved')}
-                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1"
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Approve Variant
-                            </button>
-                            <button
-                              onClick={() => handleReviewVariant(v.id, 'rejected')}
-                              className="px-3 py-1.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition"
-                            >
-                              <XCircle className="h-3.5 w-3.5" />
-                              Reject Variant
-                            </button>
-                          </div>
-                        )}
+                <div className="space-y-4">
+                  {variantDrafts.map((variant, variantIndex) => (
+                    <div key={variant.id} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold uppercase text-slate-400">Variant Name</label>
+                        <input value={variant.name} onChange={(e) => setVariantDrafts((items) => items.map((item, i) => i === variantIndex ? { ...item, name: e.target.value } : item))} placeholder="e.g. Heavy Duty / Large" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs" />
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-slate-400 text-xs py-4 text-center">No variants configured.</p>
-                )}
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold uppercase text-slate-400">SKU</label>
+                        <input value={variant.sku} onChange={(e) => setVariantDrafts((items) => items.map((item, i) => i === variantIndex ? { ...item, sku: e.target.value } : item))} placeholder="Optional unique SKU" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs" />
+                      </div>
+                      <div className="space-y-2">
+                        {variant.properties.map((property, propertyIndex) => (
+                          <div key={property.id} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                            <input value={property.key} onChange={(e) => setVariantDrafts((items) => items.map((item, i) => i === variantIndex ? { ...item, properties: item.properties.map((row, j) => j === propertyIndex ? { ...row, key: e.target.value } : row) } : item))} placeholder="Property (e.g. Size)" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs" />
+                            <input value={property.value} onChange={(e) => setVariantDrafts((items) => items.map((item, i) => i === variantIndex ? { ...item, properties: item.properties.map((row, j) => j === propertyIndex ? { ...row, value: e.target.value } : row) } : item))} placeholder="Value" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs" />
+                            <button type="button" onClick={() => setVariantDrafts((items) => items.map((item, i) => i === variantIndex ? { ...item, properties: item.properties.filter((_, j) => j !== propertyIndex) } : item))} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <button type="button" onClick={() => setVariantDrafts((items) => items.map((item, i) => i === variantIndex ? { ...item, properties: [...item.properties, { id: editorId('variant-property'), key: '', value: '' }] } : item))} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2.5 py-1.5 text-[10px] font-bold"><Plus className="h-3 w-3" /> Property</button>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => deleteVariant(variant)} disabled={mutationBusy === `variant-${variant.id}`} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600">Delete</button>
+                          <button type="button" onClick={() => saveVariant(variant)} disabled={mutationBusy === `variant-${variant.id}`} className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">{mutationBusy === `variant-${variant.id}` && <Loader2 className="h-3 w-3 animate-spin" />} Save variant</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {!variantDrafts.length && <p className="py-3 text-center text-xs text-slate-400">No variants configured.</p>}
+                  <button type="button" onClick={() => setVariantDrafts((items) => [...items, { id: editorId('variant'), name: '', sku: '', properties: [{ id: editorId('variant-property'), key: '', value: '' }] }])} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-violet-300 px-3 py-2 text-xs font-bold text-violet-700"><Plus className="h-3.5 w-3.5" /> Add variant</button>
+                </div>
               </section>
 
               {/* Linked Vendors Mappings */}

@@ -36,6 +36,8 @@ export interface Product {
   description?: string | null;
   category?: string | null;
   product_type?: string | null;
+  item_code?: string | null;
+  quotation_limit?: number | null;
   attributes?: Record<string, any>;
   material?: string;
   grade?: string;
@@ -89,6 +91,7 @@ export interface Product {
   }>;
   variants?: Array<{
     id: string;
+    name?: string | null;
     sku: string | null;
     properties: Record<string, string>;
     approval_status: 'pending' | 'approved' | 'rejected';

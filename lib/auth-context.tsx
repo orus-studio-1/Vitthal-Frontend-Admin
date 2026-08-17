@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { authAPI, extractApiError } from './api';
 import { User } from './types';
 
@@ -44,18 +44,20 @@ function normalizeUser(payload: unknown): User | null {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const authRequestId = useRef(0);
 
   const refreshUser = async () => {
+    const requestId = ++authRequestId.current;
     try {
       const response = await authAPI.me();
       const normalized = normalizeUser(response.data);
-      setUser(normalized);
+      if (requestId === authRequestId.current) setUser(normalized);
       return normalized;
     } catch {
-      setUser(null);
+      if (requestId === authRequestId.current) setUser(null);
       return null;
     } finally {
-      setIsLoading(false);
+      if (requestId === authRequestId.current) setIsLoading(false);
     }
   };
 
@@ -68,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
+    const requestId = ++authRequestId.current;
     setIsLoading(true);
     try {
       const response = await authAPI.login({ email, password, role: 'admin' });
@@ -75,16 +78,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!normalized) {
         throw new Error('Only admin accounts can access this dashboard');
       }
-      setUser(normalized);
+      if (requestId === authRequestId.current) setUser(normalized);
       return normalized;
     } catch (error) {
       throw new Error(extractApiError(error, 'Login failed'));
     } finally {
-      setIsLoading(false);
+      if (requestId === authRequestId.current) setIsLoading(false);
     }
   };
 
   const logout = async () => {
+    ++authRequestId.current;
     try {
       await authAPI.logout();
     } finally {

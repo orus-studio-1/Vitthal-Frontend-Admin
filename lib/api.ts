@@ -103,12 +103,27 @@ export const productAPI = {
       },
     }),
 
+  deleteProductImage: (imageId: string) =>
+    api.delete<{ message: string }>(`/api/products/image/${imageId}`),
+
+  setPrimaryImage: (productId: string, imageId: string) =>
+    api.put<{ message: string }>('/api/products/image/set-primary', { productId, imageId }),
+
+  replaceSpecifications: (productId: string, specifications: Array<{ key: string; value: string }>) =>
+    api.put<ApiResponse<any>>(`/api/products/${productId}/specifications`, { specifications }),
+
   addProductVariant: (data: {
     productId: string;
     sku: string | null;
     name?: string | null;
     properties: Record<string, string>;
   }) => api.post<ApiResponse<any>>('/api/products/addProductVariant', data),
+
+  updateProductVariant: (variantId: string, data: { name?: string | null; sku: string | null; properties: Record<string, string> }) =>
+    api.put<ApiResponse<any>>(`/api/products/variant/${variantId}`, data),
+
+  deleteProductVariant: (variantId: string) =>
+    api.delete<{ message: string }>(`/api/products/variant/${variantId}`),
 
   getAll: () => api.get<ApiResponse<Product[]>>('/api/products'),
 
@@ -187,13 +202,14 @@ export const productAPI = {
       description: string;
       category: string;
       productType: string;
-      specifications: string;
       is_active: boolean;
       attributes: Record<string, string>;
       material?: string;
       grade?: string;
       application?: string;
       standard?: string;
+      itemCode?: string | null;
+      quotationLimit?: number | null;
     }>
   ) => api.put<ApiResponse<Product>>(`/api/products/${id}`, data),
 
