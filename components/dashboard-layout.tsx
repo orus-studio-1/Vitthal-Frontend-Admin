@@ -23,6 +23,7 @@ import {
   Bike,
   Wrench,
   ShieldCheck,
+  Briefcase,
 } from 'lucide-react';
 
 const navigation = [
@@ -30,8 +31,10 @@ const navigation = [
   { name: 'Products', href: '/dashboard/products', icon: Package },
   { name: 'Price Approvals', href: '/dashboard/products/price-approvals', icon: DollarSign },
   { name: 'Product Categories', href: '/dashboard/categories', icon: Tags },
-  { name: 'Service Categories', href: '/dashboard/service-categories', icon: Tags },
-  { name: 'Services', href: '/dashboard/services', icon: Wrench },
+  { name: 'Service Categories & Builder', href: '/dashboard/service-categories', icon: Tags },
+  { name: 'Service Hub Tickets', href: '/dashboard/service-hub', icon: Wrench },
+  { name: 'Client Assets', href: '/dashboard/service-hub/assets', icon: Package },
+  { name: 'Employee Hiring', href: '/dashboard/hiring', icon: Briefcase },
   { name: 'Vendors', href: '/dashboard/vendors', icon: Building2 },
   { name: 'Fulfillment Centers', href: '/dashboard/fulfillment-centers', icon: MapPin },
   { name: 'Rider Partners', href: '/dashboard/riders', icon: Bike },

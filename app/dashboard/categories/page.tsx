@@ -11,35 +11,16 @@ import {
   Edit2,
   Save,
   Plus,
-  FolderPlus,
   AlertCircle,
   Tag,
-  Eye,
-  Info,
-  Calendar,
   Layers,
-  Percent,
-  TrendingUp,
   Upload,
   ImageIcon
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { extractApiError, productAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
-
-interface Category {
-  id: string;
-  code: string;
-  label: string;
-  description: string | null;
-  image: string;
-  min_commision_percentage: number;
-  max_commision_percentage: number;
-  sort_order: number;
-  is_active: boolean;
-  created_at?: string;
-  updated_at?: string;
-}
+import { Category, Subcategory } from '../../../lib/types';
 
 export default function CategoriesPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -50,12 +31,28 @@ export default function CategoriesPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Modals state
+  // Category Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
-  // Form states
+  // Subcategory Modal state
+  const [isSubcatModalOpen, setIsSubcatModalOpen] = useState(false);
+  const [subcatCategory, setSubcatCategory] = useState<Category | null>(null);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [loadingSubcats, setLoadingSubcats] = useState(false);
+  const [newSubcatName, setNewSubcatName] = useState('');
+  const [newSubcatDesc, setNewSubcatDesc] = useState('');
+  const [subcatSubmitting, setSubcatSubmitting] = useState(false);
+  const [subcatError, setSubcatError] = useState('');
+  const [subcatSuccess, setSubcatSuccess] = useState('');
+
+  // Editing subcategory state
+  const [editingSubcatId, setEditingSubcatId] = useState<string | null>(null);
+  const [editSubcatName, setEditSubcatName] = useState('');
+  const [editSubcatDesc, setEditSubcatDesc] = useState('');
+
+  // Category Form states
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState('');
@@ -169,6 +166,101 @@ export default function CategoriesPage() {
     setIsEditOpen(true);
   };
 
+  // Open Subcategory Modal
+  const handleOpenSubcatModal = async (category: Category) => {
+    setSubcatCategory(category);
+    setNewSubcatName('');
+    setNewSubcatDesc('');
+    setEditingSubcatId(null);
+    setSubcatError('');
+    setSubcatSuccess('');
+    setIsSubcatModalOpen(true);
+    await loadSubcategories(category.id);
+  };
+
+  const loadSubcategories = async (categoryId: string) => {
+    try {
+      setLoadingSubcats(true);
+      setSubcatError('');
+      const res = await productAPI.getSubcategories(categoryId);
+      setSubcategories(res.data?.data || []);
+    } catch (err) {
+      setSubcatError(extractApiError(err, 'Failed to load subcategories'));
+    } finally {
+      setLoadingSubcats(false);
+    }
+  };
+
+  const handleCreateSubcategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subcatCategory || !newSubcatName.trim()) return;
+
+    try {
+      setSubcatSubmitting(true);
+      setSubcatError('');
+      setSubcatSuccess('');
+      await productAPI.createSubcategory(subcatCategory.id, {
+        name: newSubcatName.trim(),
+        description: newSubcatDesc.trim() || undefined,
+      });
+      setSubcatSuccess(`Subcategory "${newSubcatName.trim()}" created successfully!`);
+      setNewSubcatName('');
+      setNewSubcatDesc('');
+      await loadSubcategories(subcatCategory.id);
+      await fetchCategories();
+    } catch (err) {
+      setSubcatError(extractApiError(err, 'Failed to create subcategory'));
+    } finally {
+      setSubcatSubmitting(false);
+    }
+  };
+
+  const handleStartEditSubcat = (subcat: Subcategory) => {
+    setEditingSubcatId(subcat.id);
+    setEditSubcatName(subcat.name);
+    setEditSubcatDesc(subcat.description || '');
+    setSubcatError('');
+    setSubcatSuccess('');
+  };
+
+  const handleSaveEditSubcat = async (id: string) => {
+    if (!editSubcatName.trim() || !subcatCategory) return;
+    try {
+      setSubcatSubmitting(true);
+      setSubcatError('');
+      setSubcatSuccess('');
+      await productAPI.updateSubcategory(id, {
+        name: editSubcatName.trim(),
+        description: editSubcatDesc.trim() || undefined,
+      });
+      setSubcatSuccess('Subcategory updated successfully!');
+      setEditingSubcatId(null);
+      await loadSubcategories(subcatCategory.id);
+      await fetchCategories();
+    } catch (err) {
+      setSubcatError(extractApiError(err, 'Failed to update subcategory'));
+    } finally {
+      setSubcatSubmitting(false);
+    }
+  };
+
+  const handleDeleteSubcat = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete subcategory "${name}"?`) || !subcatCategory) return;
+    try {
+      setSubcatSubmitting(true);
+      setSubcatError('');
+      setSubcatSuccess('');
+      await productAPI.deleteSubcategory(id);
+      setSubcatSuccess(`Subcategory "${name}" deleted!`);
+      await loadSubcategories(subcatCategory.id);
+      await fetchCategories();
+    } catch (err) {
+      setSubcatError(extractApiError(err, 'Failed to delete subcategory'));
+    } finally {
+      setSubcatSubmitting(false);
+    }
+  };
+
   // Create category
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,82 +343,69 @@ export default function CategoriesPage() {
     }
   };
 
-  if (authLoading || !isAuthenticated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-700" />
-      </div>
-    );
-  }
-
   return (
     <DashboardLayout>
-      <div className="relative space-y-6">
-        {/* Alerts */}
+      <div className="space-y-6 max-w-7xl mx-auto pb-12">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-5">
+          <div>
+            <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
+              Catalog Management
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
+              Product Categories & Subcategories
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Configure product category hierarchies, subcategories, image assets, commission bounds, and global visibility.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleOpenAdd}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 transition"
+            >
+              <Plus className="h-4 w-4" />
+              Add Product Category
+            </button>
+          </div>
+        </div>
+
+        {/* Global Notifications */}
         {error && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 shrink-0" />
-            <span>{error}</span>
-            <button onClick={() => setError('')} className="ml-auto text-red-500 hover:text-red-700">
+          <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 animate-in fade-in">
+            <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
+            <p className="flex-1 font-medium">{error}</p>
+            <button onClick={() => setError('')} className="text-red-500 hover:text-red-700">
               <X className="h-4 w-4" />
             </button>
           </div>
         )}
 
         {success && (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 shrink-0" />
-            <span>{success}</span>
-            <button onClick={() => setSuccess('')} className="ml-auto text-emerald-500 hover:text-emerald-700">
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 animate-in fade-in">
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+            <p className="flex-1 font-medium">{success}</p>
+            <button onClick={() => setSuccess('')} className="text-emerald-500 hover:text-emerald-700">
               <X className="h-4 w-4" />
             </button>
           </div>
         )}
 
-        {/* Header section */}
-        <section className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.04)] backdrop-blur-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 h-32 w-32 bg-[#1d4ed8]/5 rounded-full blur-2xl -mr-8 -mt-8" />
-          
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 shadow-sm">
-                <Layers className="h-6 w-6" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">Manage Product Categories</h1>
-                <p className="text-sm text-slate-500">Configure client-facing product categories, commission structures, and sorting hierarchy.</p>
-              </div>
-            </div>
-            <button
-              onClick={handleOpenAdd}
-              className="flex items-center gap-2 self-start sm:self-center px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold shadow-md hover:shadow-lg transition-all duration-200"
-            >
-              <Plus className="h-4 w-4" />
-              Add Product Category
-            </button>
-          </div>
-        </section>
-
-        {/* Categories registry */}
-        <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.06)] backdrop-blur-sm">
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900">Registry Product Categories ({categories.length})</h2>
-            <div className="rounded-full bg-slate-100 px-3 py-1 font-mono text-xs font-semibold text-slate-700">
-              {categories.filter(c => c.is_active).length} Active / {categories.filter(c => !c.is_active).length} Inactive
-            </div>
-          </div>
-
+        {/* Categories Grid */}
+        <div>
           {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-700" />
+            <div className="flex min-h-[300px] items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             </div>
           ) : categories.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {categories.map((category) => (
                 <article
                   key={category.id}
-                  className={`group overflow-hidden rounded-2xl border bg-white shadow-xs hover:shadow-md transition-all duration-350 flex flex-col justify-between ${
-                    category.is_active ? 'border-slate-200' : 'border-slate-100 opacity-75 hover:opacity-100'
+                  className={`group bg-white rounded-2xl border transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-md ${
+                    category.is_active
+                      ? 'border-slate-200 hover:border-blue-400'
+                      : 'border-slate-200 opacity-75 bg-slate-50/50'
                   }`}
                 >
                   <div>
@@ -366,8 +445,52 @@ export default function CategoriesPage() {
                         {category.description || 'No description provided.'}
                       </p>
 
+                      {/* Subcategories Section */}
+                      <div className="border-t border-slate-100 pt-3">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <Tag className="h-3.5 w-3.5 text-blue-600" />
+                            Subcategories ({category.subcategory_count || category.subcategories?.length || 0})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSubcatModal(category)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg transition"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add Subcategory
+                          </button>
+                        </div>
+
+                        {category.subcategories && category.subcategories.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto py-1">
+                            {category.subcategories.slice(0, 6).map((sub) => (
+                              <span
+                                key={sub.id}
+                                className="inline-flex items-center text-[11px] font-medium bg-slate-100 text-slate-700 rounded-md px-2 py-0.5 border border-slate-200/60"
+                              >
+                                {sub.name}
+                              </span>
+                            ))}
+                            {category.subcategories.length > 6 && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenSubcatModal(category)}
+                                className="text-[11px] font-semibold text-blue-600 hover:underline px-1 py-0.5"
+                              >
+                                +{category.subcategories.length - 6} more
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic py-1">
+                            No subcategories yet. Click + Add Subcategory.
+                          </p>
+                        )}
+                      </div>
+
                       {/* Commissions */}
-                      <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 text-center">
+                      <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-3 text-center">
                         <div className="bg-slate-50 rounded-xl p-2">
                           <span className="text-[10px] text-slate-400 block uppercase font-mono tracking-wider">Min Commission</span>
                           <span className="font-bold text-slate-800 flex items-center justify-center gap-0.5 text-sm mt-0.5">
@@ -399,6 +522,13 @@ export default function CategoriesPage() {
 
                     <div className="flex gap-2">
                       <button
+                        onClick={() => handleOpenSubcatModal(category)}
+                        className="p-2 border border-blue-200 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition"
+                        title="Manage subcategories"
+                      >
+                        <Tag className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => handleOpenEdit(category)}
                         className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition"
                         title="Edit category"
@@ -425,7 +555,193 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      {/* Add / Edit Modals */}
+      {/* Subcategory Management Modal */}
+      {isSubcatModalOpen && subcatCategory && (
+        <>
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 transition-opacity"
+            onClick={() => setIsSubcatModalOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-xl bg-white shadow-2xl overflow-hidden flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-300">
+            <header className="bg-slate-900 text-white px-6 py-5 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-mono uppercase tracking-wider text-blue-400">
+                  Subcategory Registry
+                </span>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2 mt-0.5">
+                  <Tag className="h-5 w-5 text-blue-400" />
+                  {subcatCategory.label}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsSubcatModalOpen(false)}
+                className="text-slate-400 hover:text-white rounded-lg p-1 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Modal Feedback */}
+              {subcatError && (
+                <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                  <p className="flex-1 font-medium">{subcatError}</p>
+                </div>
+              )}
+              {subcatSuccess && (
+                <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <p className="flex-1 font-medium">{subcatSuccess}</p>
+                </div>
+              )}
+
+              {/* Add New Subcategory Form */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Plus className="h-4 w-4 text-blue-600" />
+                  Add New Subcategory
+                </h4>
+                <form onSubmit={handleCreateSubcategory} className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Subcategory Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Stainless Steel Sheets, Hydraulic Pumps..."
+                      value={newSubcatName}
+                      onChange={(e) => setNewSubcatName(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Description (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Brief details about this subcategory..."
+                      value={newSubcatDesc}
+                      onChange={(e) => setNewSubcatDesc(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                    />
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      disabled={subcatSubmitting || !newSubcatName.trim()}
+                      className="inline-flex items-center gap-1.5 bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-800 transition disabled:opacity-50"
+                    >
+                      {subcatSubmitting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="h-3.5 w-3.5" />
+                      )}
+                      Save Subcategory
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Subcategories List */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                  <span>Existing Subcategories ({subcategories.length})</span>
+                  {loadingSubcats && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />}
+                </h4>
+
+                {subcategories.length > 0 ? (
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                    {subcategories.map((sub) => (
+                      <div key={sub.id} className="p-3.5 hover:bg-slate-50/80 transition flex items-center justify-between gap-3">
+                        {editingSubcatId === sub.id ? (
+                          <div className="flex-1 space-y-2">
+                            <input
+                              type="text"
+                              value={editSubcatName}
+                              onChange={(e) => setEditSubcatName(e.target.value)}
+                              className="w-full rounded-lg border border-blue-400 bg-white px-2.5 py-1 text-sm font-semibold text-slate-900 focus:outline-none"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Description..."
+                              value={editSubcatDesc}
+                              onChange={(e) => setEditSubcatDesc(e.target.value)}
+                              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 focus:outline-none"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleSaveEditSubcat(sub.id)}
+                                disabled={subcatSubmitting || !editSubcatName.trim()}
+                                className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingSubcatId(null)}
+                                className="px-2.5 py-1 border border-slate-200 text-slate-600 rounded-lg text-xs hover:bg-slate-100 transition"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-slate-900 text-sm truncate">{sub.name}</p>
+                              {sub.description && (
+                                <p className="text-xs text-slate-500 truncate mt-0.5">{sub.description}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditSubcat(sub)}
+                                className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                                title="Edit subcategory"
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSubcat(sub.id, sub.name)}
+                                className="p-1.5 text-slate-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
+                                title="Delete subcategory"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 border border-dashed border-slate-200 rounded-2xl text-xs text-slate-400">
+                    No subcategories added under this category yet.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <footer className="border-t border-slate-200 p-4 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSubcatModalOpen(false)}
+                className="px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition"
+              >
+                Close
+              </button>
+            </footer>
+          </div>
+        </>
+      )}
+
+      {/* Category Add / Edit Modals */}
       {(isAddOpen || isEditOpen) && (
         <>
           <div
@@ -451,51 +767,48 @@ export default function CategoriesPage() {
                   setIsAddOpen(false);
                   setIsEditOpen(false);
                 }}
-                className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition"
+                className="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition"
               >
                 <X className="h-5 w-5" />
               </button>
             </header>
 
             <form onSubmit={isAddOpen ? handleCreate : handleUpdate} className="flex-1 overflow-y-auto p-6 space-y-6">
-              {submitting && (
-                <div className="absolute inset-0 bg-white/70 backdrop-blur-xs flex items-center justify-center z-30">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-700" />
-                </div>
-              )}
-
-              <section className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 shadow-xs">
+              <section className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Category Name / Label
+                    Display Label *
                   </label>
                   <input
                     type="text"
                     required
+                    placeholder="e.g. Metal & Fabrication Products"
                     value={label}
-                    onChange={(e) => setLabel(e.target.value)}
-                    placeholder="e.g. Precision CNC Tooling"
+                    onChange={(e) => {
+                      setLabel(e.target.value);
+                      if (isAddOpen && !code) {
+                        setCode(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_'));
+                      }
+                    }}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Unique Code (Identifier)
+                    System Code *
                   </label>
                   <input
                     type="text"
                     required
+                    placeholder="e.g. metal_fabrication_products"
                     value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="e.g. precision_cnc_tooling"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                    onChange={(e) => setCode(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   />
-                  {isEditOpen ? (
-                    <p className="mt-1.5 text-[11px] leading-4 text-amber-600">
-                      Updating this identifier changes the category code used by product/category filters. Duplicate codes are blocked automatically.
-                    </p>
-                  ) : null}
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Unique slug identifier used across catalog matching.
+                  </span>
                 </div>
 
                 <div>
@@ -504,50 +817,50 @@ export default function CategoriesPage() {
                   </label>
                   <textarea
                     rows={3}
+                    placeholder="High performance industrial goods..."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe the category..."
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition resize-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Category Image
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Category Visual Banner/Icon *
                   </label>
-                  <label className="group flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center transition hover:border-blue-300 hover:bg-blue-50/40">
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition">
+                    <Upload className="h-8 w-8 text-blue-600 mb-2" />
+                    <span className="text-sm font-semibold text-slate-700">
+                      {imageFile ? imageFile.name : 'Upload New Category Image'}
+                    </span>
+                    <span className="text-xs text-slate-400 mt-1">
+                      PNG, JPG, or WEBP up to 5MB
+                    </span>
                     <input
                       type="file"
-                      accept="image/jpeg,image/png,image/jpg,image/webp"
-                      className="hidden"
+                      accept="image/png,image/jpeg,image/jpg,image/webp"
                       onChange={(e) => handleImageSelect(e.target.files?.[0])}
+                      className="hidden"
                     />
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm ring-1 ring-slate-200 transition group-hover:ring-blue-200">
-                      <Upload className="h-5 w-5" />
-                    </span>
-                    <span className="mt-3 text-sm font-bold text-slate-800">
-                      {imagePreview ? 'Replace category image' : 'Upload category image'}
-                    </span>
-                    <span className="mt-1 text-xs text-slate-500">JPG, PNG or WEBP. Max 5MB.</span>
                   </label>
+
                   {imagePreview ? (
-                    <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                      <div className="h-36 w-full bg-slate-100">
-                        <img src={imagePreview} alt="Category preview" className="h-full w-full object-cover" />
-                      </div>
-                      <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-slate-500">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <ImageIcon className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{imageFile?.name || 'Current category image'}</span>
-                        </span>
+                    <div className="mt-3 relative h-32 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-slate-900/60 backdrop-blur-xs px-3 py-1.5 text-xs text-white flex items-center justify-between">
+                        <span>{imageFile ? 'Selected Image' : 'Current Image'}</span>
                         {imageFile ? (
                           <button
                             type="button"
                             onClick={() => {
                               setImageFile(null);
-                              setImagePreview(image || '');
+                              setImagePreview(image);
                             }}
-                            className="font-semibold text-slate-600 hover:text-red-600"
+                            className="font-semibold text-slate-300 hover:text-red-400"
                           >
                             Undo
                           </button>

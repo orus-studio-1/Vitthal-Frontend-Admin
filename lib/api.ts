@@ -18,6 +18,17 @@ import {
   VendorInsightsData,
   VendorQuotation,
   CreateVendorQuotationPayload,
+  Category,
+  Subcategory,
+  EmployeeCandidate,
+  EmployeeDocument,
+  HireRequest,
+  HiringStats,
+  ClientAsset,
+  ServiceTicket,
+  ServiceTicketQuotation,
+  ServiceTicketDocument,
+  ServiceHubStats,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000';
@@ -165,6 +176,18 @@ export const productAPI = {
   } : undefined),
 
   deleteCategory: (id: string) => api.delete<{ message: string }>(`/api/products/categories/${id}`),
+
+  getSubcategories: (categoryId?: string) =>
+    api.get<ApiResponse<Subcategory[]>>(`/api/products/subcategories${categoryId ? `?categoryId=${categoryId}` : ''}`),
+
+  createSubcategory: (categoryId: string, data: { name: string; description?: string }) =>
+    api.post<ApiResponse<Subcategory>>(`/api/products/categories/${categoryId}/subcategories`, data),
+
+  updateSubcategory: (id: string, data: { name?: string; description?: string }) =>
+    api.put<ApiResponse<Subcategory>>(`/api/products/subcategories/${id}`, data),
+
+  deleteSubcategory: (id: string) =>
+    api.delete<{ message: string }>(`/api/products/subcategories/${id}`),
 
   getById: (id: string) => api.get<ApiResponse<Product>>(`/api/products/${id}`),
 
@@ -402,6 +425,86 @@ export const serviceAPI = {
 
   getQuotations: (params?: { status?: string; vendorId?: string; page?: number; limit?: number }) =>
     api.get<ApiResponse<any>>('/api/services/admin/quotations', { params }),
+};
+
+export const hiringAPI = {
+  getStats: () =>
+    api.get<{ success: boolean; data: HiringStats }>('/api/hiring/stats'),
+
+  getAllCandidates: (params?: { status?: string; city?: string; search?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; data: EmployeeCandidate[]; pagination: { page: number; limit: number; total: number } }>('/api/hiring/candidates', { params }),
+
+  getCandidateById: (id: string) =>
+    api.get<{ success: boolean; data: EmployeeCandidate }> (`/api/hiring/candidates/${id}`),
+
+  createCandidate: (data: Partial<EmployeeCandidate>) =>
+    api.post<{ success: boolean; data: EmployeeCandidate }>('/api/hiring/candidates', data),
+
+  updateCandidate: (id: string, data: Partial<EmployeeCandidate>) =>
+    api.patch<{ success: boolean; data: EmployeeCandidate }>(`/api/hiring/candidates/${id}`, data),
+
+  verifyCandidate: (id: string, action: 'approve' | 'reject', rejection_reason?: string) =>
+    api.patch<{ success: boolean; message: string; data: EmployeeCandidate }>(`/api/hiring/candidates/${id}/verify`, { action, rejection_reason }),
+
+  deleteCandidate: (id: string) =>
+    api.delete<{ success: boolean; message: string }>(`/api/hiring/candidates/${id}`),
+
+  addDocument: (candidateId: string, data: { doc_type: string; doc_number?: string; doc_url: string; doc_name?: string; metadata?: any }) =>
+    api.post<{ success: boolean; data: EmployeeDocument }>(`/api/hiring/candidates/${candidateId}/documents`, data),
+
+  deleteDocument: (docId: string) =>
+    api.delete<{ success: boolean; message: string }>(`/api/hiring/documents/${docId}`),
+
+  getAllHireRequests: (params?: { status?: string }) =>
+    api.get<{ success: boolean; data: HireRequest[] }>('/api/hiring/requests', { params }),
+
+  reviewHireRequest: (id: string, action: 'approve' | 'reject' | 'complete', admin_notes?: string) =>
+    api.patch<{ success: boolean; message: string; data: HireRequest }>(`/api/hiring/requests/${id}`, { action, admin_notes }),
+};
+
+export const serviceHubAPI = {
+  getStats: () =>
+    api.get<{ success: boolean; stats: ServiceHubStats }>('/api/service-hub/stats'),
+
+  getAllTickets: (params?: { status?: string; category_id?: string; priority?: string; search?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; tickets: ServiceTicket[]; pagination: { total: number; page: number; limit: number; totalPages: number } }>('/api/service-hub/tickets', { params }),
+
+  getTicketById: (id: string) =>
+    api.get<{ success: boolean; ticket: ServiceTicket }>(`/api/service-hub/tickets/${id}`),
+
+  updateTicketStatus: (id: string, status: string, note?: string) =>
+    api.patch<{ success: boolean; message: string; ticket: ServiceTicket }>(`/api/service-hub/tickets/${id}/status`, { status, note }),
+
+  assignPersonnel: (id: string, data: { vendor_id?: string; assigned_agent_id?: string; note?: string }) =>
+    api.patch<{ success: boolean; message: string; ticket: ServiceTicket }>(`/api/service-hub/tickets/${id}/assign`, data),
+
+  // Categories & Subcategories Dynamic Form Schema
+  getCategories: () =>
+    api.get<{ success: boolean; categories: any[] }>('/api/service-hub/categories'),
+
+  createCategory: (data: any) =>
+    api.post<{ success: boolean; message: string; category: any }>('/api/service-hub/categories', data),
+
+  updateCategory: (id: string, data: any) =>
+    api.put<{ success: boolean; message: string; category: any }>(`/api/service-hub/categories/${id}`, data),
+
+  deleteCategory: (id: string) =>
+    api.delete<{ success: boolean; message: string }>(`/api/service-hub/categories/${id}`),
+
+  createSubcategory: (data: { category_id: string; name: string; description?: string; form_schema?: any[] }) =>
+    api.post<{ success: boolean; message: string; subcategory: any }>('/api/service-hub/subcategories', data),
+
+  updateSubcategory: (id: string, data: { name?: string; description?: string; form_schema?: any[] }) =>
+    api.put<{ success: boolean; message: string; subcategory: any }>(`/api/service-hub/subcategories/${id}`, data),
+
+  deleteSubcategory: (id: string) =>
+    api.delete<{ success: boolean; message: string }>(`/api/service-hub/subcategories/${id}`),
+
+  updateSubcategorySchema: (subcategoryId: string, form_schema: any[]) =>
+    api.patch<{ success: boolean; message: string; subcategory: any }>(`/api/service-hub/subcategories/${subcategoryId}/schema`, { form_schema }),
+
+  getAllAssets: (params?: { search?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; assets: ClientAsset[]; pagination: { total: number; page: number; limit: number; totalPages: number } }>('/api/service-hub/assets', { params }),
 };
 
 export default api;
