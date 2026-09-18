@@ -31,7 +31,7 @@ import {
   ServiceHubStats,
 } from './types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9001';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -277,7 +277,7 @@ export const vendorAPI = {
     api.get<ApiResponse<VendorInsightsData>>(`/api/vendors/${id}/insights`, { params: { timeframe } }),
 
   updateStatus: (id: string, data: Partial<Pick<Vendor, 'is_active' | 'is_blocked'>>) =>
-    api.put<ApiResponse<Vendor>>(`/api/vendors/${id}/status`, data),
+    api.put<ApiResponse<Vendor>>(`${id}/status`, data),
 
   review: (id: string, decision: 'approved' | 'rejected' | 'reconsideration', notes?: string) =>
     api.put<ApiResponse<Vendor>>(`/api/vendors/${id}/review`, { decision, notes }),

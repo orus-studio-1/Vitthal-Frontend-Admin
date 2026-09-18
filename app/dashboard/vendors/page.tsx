@@ -263,11 +263,13 @@ export default function VendorsPage() {
       });
       setQuotationVendor(null);
       setQuotationForm(defaultQuotationForm);
+      await fetchVendors();
     } catch (quotationError) {
       setQuotationFeedback({
         type: 'error',
         text: extractApiError(quotationError, 'Failed to send agreement'),
       });
+      await fetchVendors();
     } finally {
       setQuotationSubmitting(false);
     }
@@ -307,7 +309,7 @@ export default function VendorsPage() {
   const reviewPendingVendors = useMemo(() => {
     return filteredVendors.filter(
       (vendor) =>
-        (vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent') &&
+        ['pending', 'agreement_sent', 'reconsideration'].includes(vendor.approval_status) &&
         (activeVendorTab === 'product'
           ? vendor.vendor_type === 'product' || vendor.vendor_type === 'both' || !vendor.vendor_type
           : vendor.vendor_type === 'service' || vendor.vendor_type === 'both')
@@ -317,8 +319,7 @@ export default function VendorsPage() {
   const approvedVendors = useMemo(() => {
     return filteredVendors.filter(
       (vendor) =>
-        vendor.approval_status !== 'pending' &&
-        vendor.approval_status !== 'agreement_sent' &&
+        !['pending', 'agreement_sent', 'reconsideration'].includes(vendor.approval_status) &&
         (activeVendorTab === 'product'
           ? vendor.vendor_type === 'product' || vendor.vendor_type === 'both' || !vendor.vendor_type
           : vendor.vendor_type === 'service' || vendor.vendor_type === 'both')
@@ -326,13 +327,17 @@ export default function VendorsPage() {
   }, [filteredVendors, activeVendorTab]);
 
   const getAgreementForVendor = (vendorId: string) => latestAgreementByVendor[vendorId] || null;
-  const canSendAgreement = (vendor: Vendor) => vendor.approval_status === 'pending' && !getAgreementForVendor(vendor.id);
+  const canSendAgreement = (vendor: Vendor) => {
+    const agreement = getAgreementForVendor(vendor.id);
+    const isSigned = Boolean(agreement && ['vendor_approved', 'admin_approved'].includes(agreement.status));
+    return ['pending', 'reconsideration', 'agreement_sent'].includes(vendor.approval_status) && !isSigned;
+  };
   const canApproveVendor = (vendor: Vendor) => {
     const agreement = getAgreementForVendor(vendor.id);
     return vendor.approval_status === 'agreement_sent' && Boolean(agreement && ['vendor_approved', 'admin_approved'].includes(agreement.status));
   };
   const canRejectVendor = (vendor: Vendor) => {
-    return vendor.approval_status === 'pending' || vendor.approval_status === 'agreement_sent';
+    return ['pending', 'agreement_sent', 'reconsideration'].includes(vendor.approval_status);
   };
 
   if (authLoading || !isAuthenticated) {
@@ -402,6 +407,16 @@ export default function VendorsPage() {
                           {vendor.application_number && (
                             <span className="rounded-2xl bg-blue-50 border border-blue-200/60 px-2.5 py-0.5 font-mono text-xs font-semibold text-blue-700">
                               {vendor.application_number}
+                            </span>
+                          )}
+                          {vendor.approval_status === 'reconsideration' && (
+                            <span className="rounded-2xl bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                              Needs changes / Resubmitted
+                            </span>
+                          )}
+                          {vendor.approval_status === 'agreement_sent' && (
+                            <span className="rounded-2xl bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                              Agreement Sent
                             </span>
                           )}
                         </div>
