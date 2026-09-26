@@ -32,6 +32,7 @@ const navigation = [
   { name: 'Price Approvals', href: '/dashboard/products/price-approvals', icon: DollarSign },
   { name: 'Product Categories', href: '/dashboard/categories', icon: Tags },
   { name: 'Service Categories & Builder', href: '/dashboard/service-categories', icon: Tags },
+  { name: 'Services & Approvals', href: '/dashboard/services/catalog', icon: Wrench },
   { name: 'Service Hub Tickets', href: '/dashboard/service-hub', icon: Wrench },
   { name: 'Client Assets', href: '/dashboard/service-hub/assets', icon: Package },
   { name: 'Employee Hiring', href: '/dashboard/hiring', icon: Briefcase },
