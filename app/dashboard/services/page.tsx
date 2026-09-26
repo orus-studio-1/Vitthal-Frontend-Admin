@@ -8,7 +8,7 @@ export default function ServicesRedirectPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/dashboard/service-categories');
+    router.replace('/dashboard/services/catalog');
   }, [router]);
 
   return (
