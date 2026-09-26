@@ -381,7 +381,7 @@ export const riderAPI = {
 
 export const serviceAPI = {
   getAll: (params?: { status?: string; search?: string; page?: number; limit?: number }) =>
-    api.get<ApiResponse<any>>('/api/services', { params }),
+    api.get<ApiResponse<any>>('/api/services/admin/list', { params }),
 
   getSubcategories: (params?: { categoryId?: string }) =>
     api.get<ApiResponse<any[]>>('/api/services/subcategories', { params }),
