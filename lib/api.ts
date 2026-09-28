@@ -29,6 +29,7 @@ import {
   ServiceTicketQuotation,
   ServiceTicketDocument,
   ServiceHubStats,
+  ContactQuery
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9001';
@@ -505,6 +506,16 @@ export const serviceHubAPI = {
 
   getAllAssets: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ success: boolean; assets: ClientAsset[]; pagination: { total: number; page: number; limit: number; totalPages: number } }>('/api/service-hub/assets', { params }),
+};
+
+export const contactQueriesAPI = {
+  getAll: (params?: { status?: string; page?: number; limit?: number }) =>
+    api.get<ApiResponse<ContactQuery[]> & {
+      pagination: { page: number; limit: number; total: number; totalPages: number };
+    }>('/api/contact/queries', { params }),
+
+  updateStatus: (id: string, status: ContactQuery['status']) =>
+    api.patch<ApiResponse<ContactQuery>>(`/api/contact/queries/${id}`, { status }),
 };
 
 export default api;

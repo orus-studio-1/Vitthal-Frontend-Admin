@@ -774,3 +774,17 @@ export interface ServiceHubStats {
 }
 
 
+export interface ContactQuery {
+  id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  subject: string;
+  message: string;
+  status: 'new' | 'in_progress' | 'resolved';
+  created_at: string;
+  updated_at: string;
+}
+
+

@@ -49,6 +49,7 @@ const navigation = [
   { name: 'Vendor Payouts', href: '/dashboard/payouts', icon: DollarSign },
   { name: 'Users', href: '/dashboard/users', icon: Users },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
+  { name: 'Client Queries', href: '/dashboard/contact-queries' , icon : MessageSquare}
 ];
 
 interface DashboardLayoutProps {
