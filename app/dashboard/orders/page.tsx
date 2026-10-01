@@ -378,7 +378,7 @@ export default function OrdersPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                        {(product.category || 'General').toUpperCase()}
+                        {(product.category_label || 'General').toUpperCase()}
                       </div>
                       <h2 className="mt-3 text-lg font-semibold text-slate-900">{product.name}</h2>
                       <p className="mt-1 text-sm text-slate-500">{product.product_type || 'General product type'}</p>
@@ -649,8 +649,149 @@ export default function OrdersPage() {
                       </div>
                     </section>
 
+                    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="font-semibold text-slate-900">
+                            Dispatch Details
+                          </h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Transport and shipment documents provided by the vendor.
+                          </p>
+                        </div>
+
+                        {orderDetail.dispatch_details ? (
+                          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                            Details Provided
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                            Not Provided
+                          </span>
+                        )}
+                      </div>
+                      {orderDetail.dispatch_details ? (
+                        <div className="mt-5 space-y-5">
+
+                          {/* Transport Information */}
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <div className="rounded-2xl bg-slate-50 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                LR Number
+                              </p>
+                              <p className="mt-2 font-semibold text-slate-900">
+                                {orderDetail.dispatch_details.lr_number || 'Not provided'}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-slate-50 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                E-way Bill Number
+                              </p>
+                              <p className="mt-2 font-semibold text-slate-900">
+                                {orderDetail.dispatch_details.eway_bill_number || 'Not provided'}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-slate-50 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                Transporter
+                              </p>
+                              <p className="mt-2 font-semibold text-slate-900">
+                                {orderDetail.dispatch_details.transporter_name || 'Not provided'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Documents */}
+                          <div>
+                            <h4 className="mb-3 text-sm font-semibold text-slate-800">
+                              Documents
+                            </h4>
+
+                            <div className="grid gap-3 md:grid-cols-2">
+
+                              {[
+                                {
+                                  label: 'E-way Bill',
+                                  url: orderDetail.dispatch_details.eway_bill_url,
+                                },
+                                {
+                                  label: 'Delivery Challan',
+                                  url: orderDetail.dispatch_details.delivery_challan_url,
+                                },
+                                {
+                                  label: 'Invoice',
+                                  url: orderDetail.dispatch_details.invoice_url,
+                                },
+                                {
+                                  label: 'LR Document',
+                                  url: orderDetail.dispatch_details.lr_document_url,
+                                },
+                              ].map((document) => (
+                                <div
+                                  key={document.label}
+                                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                                >
+                                  <div className="flex min-w-0 items-center gap-3">
+
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {document.label}
+                                      </p>
+
+                                      <p className="text-xs text-slate-400">
+                                        {document.url ? 'Document available' : 'Not provided'}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {document.url ? (
+                                    <a
+                                      href={document.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="shrink-0 rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
+                                    >
+                                      View
+                                    </a>
+                                  ) : (
+                                    <span className="shrink-0 text-xs font-medium text-slate-400">
+                                      —
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+
+                            </div>
+                          </div>
+
+                          {/* Last Updated */}
+                          {orderDetail.dispatch_details.updated_at && (
+                            <p className="text-xs text-slate-400">
+                              Last updated:{' '}
+                              {new Date(
+                                orderDetail.dispatch_details.updated_at
+                              ).toLocaleString('en-IN')}
+                            </p>
+                          )}
+
+                        </div>
+                      ) : (
+                        <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-6 text-center">
+                          <p className="text-sm font-medium text-slate-600">
+                            No dispatch details provided by the vendor.
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            Dispatch information will appear here when the vendor provides it.
+                          </p>
+                        </div>
+                      )}
+                    </section>
+
                     <section className="rounded-2xl border border-slate-200 p-5">
                       <h3 className="font-semibold text-slate-900">Items</h3>
+                      
                       <div className="mt-4 divide-y divide-slate-100">
                         {(orderDetail.items || []).map((item: any, index: number) => (
                           <div key={`${item.product_id}-${index}`} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
