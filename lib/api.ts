@@ -313,8 +313,17 @@ export const adminAPI = {
   getPayouts: () =>
     api.get<ApiResponse<any[]>>('/api/orders/payouts'),
 
-  updatePayout: (orderId: string, payoutPercentage: number, notes?: string) =>
-    api.put<ApiResponse<any>>(`/api/orders/payouts/${orderId}`, { payoutPercentage, notes }),
+  getPayoutRequests: () =>
+    api.get<ApiResponse<any[]>>('/api/orders/payout-requests'),
+
+  revealPayoutBankDetails: (requestId: string) =>
+    api.get<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/bank-details`),
+
+  rejectPayoutRequest: (requestId: string, reason: string) =>
+    api.patch<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/reject`, { reason }),
+
+  payPayoutRequest: (requestId: string, amount: number, transferReference: string) =>
+    api.patch<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/pay`, { amount, transferReference }),
 };
 
 export const quotationAPI = {
