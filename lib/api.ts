@@ -492,8 +492,14 @@ export const serviceHubAPI = {
   deleteCategory: (id: string) =>
     api.delete<{ success: boolean; message: string }>(`/api/service-hub/categories/${id}`),
 
-  createSubcategory: (data: { category_id: string; name: string; description?: string; form_schema?: any[] }) =>
-    api.post<{ success: boolean; message: string; subcategory: any }>('/api/service-hub/subcategories', data),
+  createSubcategory: (data: { category_id: string; parent_id?: string | null; name: string; description?: string; form_schema?: any[] }) =>
+    api.post<{ success: boolean; message: string; subcategory: any }>('/api/service-hub/subcategories', {
+      category_id: data.category_id,
+      parent_id: data.parent_id || null,
+      name: data.name,
+      description: data.description,
+      form_schema: data.form_schema || [],
+    }),
 
   updateSubcategory: (id: string, data: { name?: string; description?: string; form_schema?: any[] }) =>
     api.put<{ success: boolean; message: string; subcategory: any }>(`/api/service-hub/subcategories/${id}`, data),
