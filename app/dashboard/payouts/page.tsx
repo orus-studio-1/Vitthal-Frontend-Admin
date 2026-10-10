@@ -1,3 +1,4 @@
+    // request_status: 'requested' | 'partially_paid' | 'rejected' | 'paid';
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -24,7 +25,8 @@ import {
     Mail,
     Phone,
     FileText,
-    Navigation
+    Navigation,
+    Eye
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
 import { adminAPI, orderAPI, extractApiError } from '../../../lib/api';
@@ -52,11 +54,41 @@ interface Payout {
     client_paid_percentage: string | number;
 }
 
+interface PayoutRequest {
+    request_id: string;
+    vendor_id: string;
+    order_id: string | null;
+    booking_id: string | null;
+    request_status: 'requested' | 'partially_paid' | 'rejected' | 'paid';
+    eligible_amount: string | number;
+    paid_amount: string | number | null;
+    transfer_reference: string | null;
+    rejection_reason: string | null;
+    requested_at: string;
+    processed_at: string | null;
+    vendor_name: string;
+    bank_name: string | null;
+    account_holder_name: string | null;
+    ifsc_code: string | null;
+    account_last_four: string | null;
+    bank_details_complete: boolean;
+    customer_name: string;
+    transaction_status: string;
+    client_payment_status: string;
+    transaction_amount: string | number;
+    transaction_type: 'order' | 'service';
+    transfers: Array<{ amount: string | number; reference: string; transferred_at: string }>;
+}
+
 export default function AdminPayoutsPage() {
     const { isAuthenticated, isLoading: authLoading } = useAuth();
     const router = useRouter();
     
     const [payouts, setPayouts] = useState<Payout[]>([]);
+        const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
+        const [revealedBankDetails, setRevealedBankDetails] = useState<Record<string, any>>({});
+        const [paymentDrafts, setPaymentDrafts] = useState<Record<string, { amount: string; reference: string }>>({});
+        const [requestActionId, setRequestActionId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -64,12 +96,6 @@ export default function AdminPayoutsPage() {
     const [copiedId, setCopiedId] = useState<string | null>(null);
     
     // Modal state
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedPayout, setSelectedPayout] = useState<Payout | null>(null);
-    const [updatePercentage, setUpdatePercentage] = useState<number>(0);
-    const [updateNotes, setUpdateNotes] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-
     // Order Detail Drawer State
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
     const [selectedDetailPayout, setSelectedDetailPayout] = useState<Payout | null>(null);
@@ -110,6 +136,15 @@ export default function AdminPayoutsPage() {
         }
     }
 
+    async function loadPayoutRequests() {
+        try {
+            const response = await adminAPI.getPayoutRequests();
+            setPayoutRequests(response.data.data || []);
+        } catch (err) {
+            setError(extractApiError(err, 'Failed to retrieve vendor payout requests.'));
+        }
+    }
+
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
             router.replace('/login');
@@ -118,6 +153,7 @@ export default function AdminPayoutsPage() {
 
         if (isAuthenticated) {
             void loadPayouts();
+            void loadPayoutRequests();
         }
     }, [authLoading, isAuthenticated, router]);
 
@@ -127,32 +163,52 @@ export default function AdminPayoutsPage() {
         setTimeout(() => setCopiedId(null), 2000);
     };
 
-    const handleOpenModal = (payout: Payout) => {
-        setSelectedPayout(payout);
-        setUpdatePercentage(Number(payout.payout_percentage));
-        setUpdateNotes(payout.payout_notes || '');
-        setIsModalOpen(true);
-    };
-
-    const handleCloseModal = () => {
-        setSelectedPayout(null);
-        setIsModalOpen(false);
-    };
-
-    const handleUpdatePayoutSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedPayout) return;
-
+    const handleRevealBankDetails = async (requestId: string) => {
         try {
-            setSubmitting(true);
-            await adminAPI.updatePayout(selectedPayout.order_id, updatePercentage, updateNotes);
-            toast.success('Payout record updated successfully.');
-            handleCloseModal();
-            void loadPayouts();
+            setRequestActionId(requestId);
+            const response = await adminAPI.revealPayoutBankDetails(requestId);
+            setRevealedBankDetails((current) => ({ ...current, [requestId]: response.data.data }));
         } catch (err) {
-            toast.error(extractApiError(err, 'Failed to update payout details.'));
+            toast.error(extractApiError(err, 'Unable to reveal bank details.'));
         } finally {
-            setSubmitting(false);
+            setRequestActionId(null);
+        }
+    };
+
+    const handleRejectRequest = async (request: PayoutRequest) => {
+        const reason = window.prompt('Reason for rejecting this payout request:')?.trim();
+        if (!reason) return;
+        try {
+            setRequestActionId(request.request_id);
+            await adminAPI.rejectPayoutRequest(request.request_id, reason);
+            toast.success('Payout request rejected. Vendor may submit it again.');
+            await loadPayoutRequests();
+        } catch (err) {
+            toast.error(extractApiError(err, 'Unable to reject payout request.'));
+        } finally {
+            setRequestActionId(null);
+        }
+    };
+
+    const handlePayRequest = async (request: PayoutRequest) => {
+        const draft = paymentDrafts[request.request_id];
+        const amount = Number(draft?.amount || request.eligible_amount);
+        const reference = draft?.reference?.trim() || '';
+        const remainingAmount = Number(request.eligible_amount) - Number(request.paid_amount || 0);
+        if (!Number.isFinite(amount) || amount <= 0 || amount > remainingAmount || !reference) {
+            toast.error('Enter an amount within the remaining eligible limit and the bank transfer UTR/reference.');
+            return;
+        }
+        if (!window.confirm(`Confirm manual transfer of ₹${amount.toLocaleString('en-IN')} to ${request.vendor_name}?`)) return;
+        try {
+            setRequestActionId(request.request_id);
+            await adminAPI.payPayoutRequest(request.request_id, amount, reference);
+            toast.success('Payout marked paid with transfer reference.');
+            await Promise.all([loadPayoutRequests(), loadPayouts()]);
+        } catch (err) {
+            toast.error(extractApiError(err, 'Unable to process payout request.'));
+        } finally {
+            setRequestActionId(null);
         }
     };
 
@@ -311,10 +367,10 @@ export default function AdminPayoutsPage() {
             <div className="mb-6 flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Vendor Payouts</h1>
-                    <p className="text-sm text-slate-500">Track and settle payouts to vendors based on order delivery credit cycle terms.</p>
+                    <p className="text-sm text-slate-500">Review eligible vendor requests and record manual bank transfers.</p>
                 </div>
                 <button 
-                    onClick={loadPayouts}
+                    onClick={() => void Promise.all([loadPayouts(), loadPayoutRequests()])}
                     disabled={loading}
                     className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
                 >
@@ -322,6 +378,85 @@ export default function AdminPayoutsPage() {
                     Refresh
                 </button>
             </div>
+
+            <section className="mb-8 rounded-[1.25rem] border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900">Vendor payout requests</h2>
+                        <p className="text-sm text-slate-500">Review beneficiary details, then record the manual bank transfer reference.</p>
+                    </div>
+                    <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+                        {payoutRequests.filter((request) => request.request_status === 'requested' || request.request_status === 'partially_paid').length} awaiting action
+                    </span>
+                </div>
+                {payoutRequests.length === 0 ? (
+                    <p className="border-t border-slate-100 py-8 text-center text-sm text-slate-500">No payout requests yet.</p>
+                ) : (
+                    <div className="divide-y divide-slate-100">
+                        {payoutRequests.map((request) => {
+                            const draft = paymentDrafts[request.request_id];
+                            const revealed = revealedBankDetails[request.request_id];
+                            const isPayable = request.request_status === 'requested' || request.request_status === 'partially_paid';
+                            const remainingAmount = Number(request.eligible_amount) - Number(request.paid_amount || 0);
+                            return (
+                                <article key={request.request_id} className="grid gap-5 py-5 lg:grid-cols-[1fr_1fr_1.2fr]">
+                                    <div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="font-bold text-slate-900">{request.vendor_name}</h3>
+                                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${isPayable ? 'bg-amber-50 text-amber-800' : request.request_status === 'paid' ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'}`}>{request.request_status.replace('_', ' ')}</span>
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-500">{request.transaction_type === 'service' ? 'Service booking' : 'Order'} · {request.order_id || request.booking_id}</p>
+                                        <p className="mt-1 text-sm text-slate-700">Client: {request.customer_name} · {request.transaction_status} / {request.client_payment_status}</p>
+                                        <p className="mt-2 text-sm text-slate-500">Requested {new Date(request.requested_at).toLocaleString('en-IN')}</p>
+                                        {request.rejection_reason && <p className="mt-2 text-sm text-rose-700">Rejected: {request.rejection_reason}</p>}
+                                        {request.transfer_reference && <p className="mt-2 text-sm font-semibold text-emerald-700">Transfer reference: {request.transfer_reference}</p>}
+                                                                            {request.transfers?.length > 0 && <div className="mt-2 space-y-1 text-xs text-slate-600">
+                                                                                {request.transfers.map((transfer) => <p key={transfer.reference}>₹{Number(transfer.amount).toLocaleString('en-IN')} · {transfer.reference} · {new Date(transfer.transferred_at).toLocaleDateString('en-IN')}</p>)}
+                                                                            </div>}
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase text-slate-400">Requested limit</p>
+                                        <p className="mt-1 text-xl font-extrabold text-slate-900">₹{Number(request.eligible_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                        {request.paid_amount != null && <p className="mt-1 text-sm text-emerald-700">Paid: ₹{Number(request.paid_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>}
+                                        {isPayable && Number(request.paid_amount || 0) > 0 && <p className="mt-1 text-sm font-semibold text-amber-700">Remaining: ₹{remainingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>}
+                                        <div className="mt-3 text-sm text-slate-700">
+                                            <p>{request.bank_name || 'Bank details incomplete'} · {request.account_holder_name || '—'}</p>
+                                            <p>Account ending {request.account_last_four || '----'} · IFSC {request.ifsc_code || '—'}</p>
+                                        </div>
+                                        <button type="button" disabled={!request.bank_details_complete || requestActionId === request.request_id} onClick={() => void handleRevealBankDetails(request.request_id)} className="mt-3 inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50">
+                                            <Eye className="h-3.5 w-3.5" /> {revealed ? 'Refresh revealed details' : 'Reveal account and cheque'}
+                                        </button>
+                                        {revealed && <div className="mt-2 rounded-md bg-slate-50 p-3 text-xs text-slate-700">
+                                            <p>Account: <span className="font-mono font-semibold">{revealed.account_number}</span></p>
+                                            {revealed.cancelled_cheque_link && <a className="mt-1 inline-block font-semibold text-blue-700 underline" href={revealed.cancelled_cheque_link} target="_blank" rel="noreferrer">Open cancelled cheque</a>}
+                                        </div>}
+                                    </div>
+
+                                    <div>
+                                        {isPayable ? (
+                                            <>
+                                                <label className="block text-xs font-semibold text-slate-600">Transfer amount (up to eligible limit)
+                                                    <input type="number" min="0.01" max={remainingAmount} step="0.01" value={draft?.amount ?? String(remainingAmount)} onChange={(event) => setPaymentDrafts((current) => ({ ...current, [request.request_id]: { amount: event.target.value, reference: current[request.request_id]?.reference || '' } }))} className="form-input mt-1" />
+                                                </label>
+                                                <label className="mt-3 block text-xs font-semibold text-slate-600">Bank UTR / transfer reference
+                                                    <input type="text" value={draft?.reference || ''} onChange={(event) => setPaymentDrafts((current) => ({ ...current, [request.request_id]: { amount: current[request.request_id]?.amount || String(remainingAmount), reference: event.target.value } }))} className="form-input mt-1" placeholder="Enter UTR after transferring" />
+                                                </label>
+                                                <div className="mt-4 flex flex-wrap gap-2">
+                                                    <button type="button" disabled={!revealed || !request.bank_details_complete || requestActionId === request.request_id} onClick={() => void handlePayRequest(request)} className="rounded-md bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{requestActionId === request.request_id ? 'Processing...' : 'Mark transferred'}</button>
+                                                    {request.request_status === 'requested' && <button type="button" disabled={requestActionId === request.request_id} onClick={() => void handleRejectRequest(request)} className="rounded-md border border-rose-300 px-3 py-2 text-xs font-bold text-rose-700 disabled:opacity-50">Reject request</button>}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <p className="text-sm text-slate-500">{request.processed_at ? `Processed ${new Date(request.processed_at).toLocaleString('en-IN')}` : 'No action recorded.'}</p>
+                                        )}
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
 
             {/* Stats Cards */}
             <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -587,16 +722,7 @@ export default function AdminPayoutsPage() {
 
                                             {/* Actions */}
                                             <td className="py-4 pr-2 text-right whitespace-nowrap">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleOpenModal(payout);
-                                                    }}
-                                                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                                                >
-                                                    <Edit2 className="h-3.5 w-3.5 text-slate-500" />
-                                                    Settle
-                                                </button>
+                                                <span className="text-xs font-medium text-slate-400">Request queue</span>
                                             </td>
                                         </tr>
                                     );
@@ -608,87 +734,6 @@ export default function AdminPayoutsPage() {
             </div>
 
             {/* Update Payout Modal */}
-            {isModalOpen && selectedPayout && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-                    <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
-                        <h2 className="text-xl font-bold text-slate-900 mb-2">Update Vendor Settlement</h2>
-                        <p className="text-sm text-slate-500 mb-6">
-                            Record a manual transaction settlement for order <span className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded">#{selectedPayout.order_id.split('-')[0]}</span> to vendor <span className="font-semibold text-slate-800">{selectedPayout.vendor_name}</span>.
-                        </p>
-
-                        <form onSubmit={handleUpdatePayoutSubmit} className="space-y-5">
-                            {/* Payout percentage slider */}
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    Settled Percentage: <span className="text-blue-700 font-extrabold">{updatePercentage}%</span>
-                                </label>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    step="5"
-                                    value={updatePercentage}
-                                    onChange={(e) => setUpdatePercentage(Number(e.target.value))}
-                                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-700"
-                                />
-                                <div className="flex justify-between text-xs text-slate-400 mt-1">
-                                    <span>0% (Unpaid)</span>
-                                    <span>50%</span>
-                                    <span>100% (Fully Settled)</span>
-                                </div>
-                            </div>
-
-                            {/* Payment calculation helper */}
-                            <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4 text-sm text-blue-800">
-                                <div className="flex justify-between">
-                                    <span>Order Total:</span>
-                                    <span className="font-bold">₹{Number(selectedPayout.order_total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                </div>
-                                <div className="flex justify-between mt-2 pt-2 border-t border-blue-100/50">
-                                    <span>Calculated Settlement:</span>
-                                    <span className="font-extrabold text-blue-700">
-                                        ₹{((updatePercentage / 100) * Number(selectedPayout.order_total_amount)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Transaction details / notes */}
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    Transaction Details / Notes
-                                </label>
-                                <textarea
-                                    className="form-input w-full min-h-[80px]"
-                                    placeholder="Enter reference ID, bank details, transaction time..."
-                                    value={updateNotes}
-                                    onChange={(e) => setUpdateNotes(e.target.value)}
-                                />
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex justify-end gap-3 pt-2">
-                                <button
-                                    type="button"
-                                    onClick={handleCloseModal}
-                                    disabled={submitting}
-                                    className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="rounded-2xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:opacity-50 flex items-center gap-2"
-                                >
-                                    {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                                    Save Settlement
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
             {/* Detail Drawer */}
             {selectedOrderId && (
                 <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">

@@ -40,6 +40,15 @@ export interface Product {
   subcategory_name?: string | null;
   product_type?: string | null;
   item_code?: string | null;
+  size?: string | number | null;
+  brand?: string | null;
+  colour?: string | null;
+  color?: string | null;
+  warranty?: string | null;
+  warranty_guarantee?: string | null;
+  guarantee?: string | null;
+  manufacturer?: string | null;
+  unit?: string | null;
   quotation_limit?: number | null;
   attributes?: Record<string, any>;
   material?: string;

@@ -79,8 +79,14 @@ export default function AddProductPage() {
   const [quotationLimit, setQuotationLimit] = useState("");
 
   const [attributes, setAttributes] = useState<AttributeDraft[]>([
+    createAttributeDraft("Size", ""),
+    createAttributeDraft("Brand", ""),
     createAttributeDraft("Material", ""),
     createAttributeDraft("Grade", ""),
+    createAttributeDraft("Colour", ""),
+    createAttributeDraft("Warranty / Guarantee", ""),
+    createAttributeDraft("Manufacturer", ""),
+    createAttributeDraft("Unit", "nos"),
     createAttributeDraft("Application", ""),
     createAttributeDraft("Standard", ""),
   ]);
@@ -661,13 +667,20 @@ export default function AddProductPage() {
                     placeholder="Property name (e.g. Material)"
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
-                  <input
-                    type="text"
-                    value={attr.value}
-                    onChange={(e) => updateAttribute(index, "value", e.target.value)}
-                    placeholder="Value (e.g. Polypropylene)"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+                  {attr.key.trim().toLowerCase() === "unit" ? (
+                    <select value={attr.value} onChange={(e) => updateAttribute(index, "value", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                      {attr.value && !["nos", "kg", "pack", "Ltr", "Box", "gram", "Ton"].includes(attr.value) ? <option value={attr.value}>{attr.value}</option> : null}
+                      {["nos", "kg", "pack", "Ltr", "Box", "gram", "Ton"].map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={attr.value}
+                      onChange={(e) => updateAttribute(index, "value", e.target.value)}
+                      placeholder="Value (e.g. Polypropylene)"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => removeAttributeRow(index)}
