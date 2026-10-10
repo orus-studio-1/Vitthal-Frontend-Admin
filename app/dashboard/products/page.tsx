@@ -55,6 +55,45 @@ type EditorRow = { id: string; key: string; value: string };
 type VariantEditor = { id: string; persistedId?: string; name: string; sku: string; properties: EditorRow[] };
 
 const editorId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const CATALOG_FIELDS: Array<{ label: string; keys: string[] }> = [
+  { label: 'Size', keys: ['size'] },
+  { label: 'Brand', keys: ['brand', 'brand_name', 'product_brand'] },
+  { label: 'Grade', keys: ['grade'] },
+  { label: 'Colour', keys: ['colour', 'color'] },
+  { label: 'Warranty / Guarantee', keys: ['warranty', 'warranty_guarantee', 'guarantee'] },
+  { label: 'Manufacturer', keys: ['manufacturer', 'manufactured_by'] },
+  { label: 'Unit', keys: ['unit', 'uom', 'unit_of_measure'] },
+];
+
+function getCatalogValue(product: Product, keys: string[]) {
+  const sources: Array<Record<string, unknown>> = [product as unknown as Record<string, unknown>, product.attributes || {}];
+  if (product.specifications && !Array.isArray(product.specifications)) sources.push(product.specifications as Record<string, unknown>);
+  for (const source of sources) {
+    const normalized = Object.fromEntries(Object.entries(source).map(([key, value]) => [key.toLowerCase().replace(/[ _/-]/g, ''), value]));
+    for (const key of keys) {
+      const value = normalized[key.toLowerCase().replace(/[ _/-]/g, '')];
+      if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+    }
+  }
+  if (Array.isArray(product.specifications)) {
+    const spec = product.specifications.find((entry: any) => keys.some((key) => String(entry?.key || entry?.spec_key || '').toLowerCase().replace(/[ _/-]/g, '') === key.toLowerCase().replace(/[ _/-]/g, '')));
+    if (spec?.value || spec?.spec_value) return String(spec.value || spec.spec_value).trim();
+  }
+  return '—';
+}
+
+function CatalogAttributeGrid({ product }: { product: Product }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-3">
+      {CATALOG_FIELDS.map(({ label, keys }) => (
+        <div key={label} className="min-w-0">
+          <p className="text-[10px] text-slate-500">{label}</p>
+          <p className="truncate text-xs font-semibold text-slate-800">{getCatalogValue(product, keys)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function ProductsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -122,7 +161,14 @@ export default function ProductsPage() {
     setEditItemCode(product.item_code || '');
     setEditQuotationLimit(product.quotation_limit ? String(product.quotation_limit) : '');
     setEditIsActive(product.is_active !== false);
-    setEditAttributes(Object.entries(product.attributes || {}).map(([key, value]) => ({
+    const editAttributeValues = { ...(product.attributes || {}) } as Record<string, unknown>;
+    CATALOG_FIELDS.forEach(({ label, keys }) => {
+      const value = getCatalogValue(product, keys);
+      if (value !== '—' && !Object.keys(editAttributeValues).some((key) => key.toLowerCase().replace(/[ _/-]/g, '') === label.toLowerCase().replace(/[ _/-]/g, ''))) {
+        editAttributeValues[label] = value;
+      }
+    });
+    setEditAttributes(Object.entries(editAttributeValues).map(([key, value]) => ({
       id: editorId('attr'), key, value: String(value ?? ''),
     })));
     setSpecificationDrafts((product.detailed_specifications || []).map((spec) => ({
@@ -485,6 +531,7 @@ export default function ProductsPage() {
                     <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
                       {product.description || 'No description provided.'}
                     </p>
+                    <CatalogAttributeGrid product={product} />
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                     <button
@@ -764,6 +811,7 @@ export default function ProductsPage() {
                             <p className="text-xs text-slate-500 mt-0.5">
                               {categoriesOptions.find(c => c.id === product.category)?.label || product.category || 'Unclassified'} • {product.product_type} • {product.vendor_count || 0} sellers
                             </p>
+                            <div className="mt-3"><CatalogAttributeGrid product={product} /></div>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -811,15 +859,17 @@ export default function ProductsPage() {
                             <p className="text-xs text-slate-500 mt-0.5">
                               Submitted by: <span className="font-semibold text-slate-700">{product.creator_vendor_name || product.creator_name || 'Vendor'}</span> • {categoriesOptions.find(c => c.id === product.category)?.label || product.category || 'Unclassified'} • {product.product_type}
                             </p>
-                            <span className={`inline-block rounded-full px-2.5 py-0.5 mt-2 text-[10px] font-bold uppercase border ${
+                        <span className={`inline-block rounded-full px-2.5 py-0.5 mt-2 text-[10px] font-bold uppercase border ${
                               product.approval_status === 'approved'
                                 ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
                                 : product.approval_status === 'rejected'
                                 ? 'bg-red-50 border-red-100 text-red-700'
                                 : 'bg-amber-50 border-amber-100 text-amber-700'
                             }`}>
-                              {product.approval_status}
-                            </span>
+                          {product.approval_status}
+                        </span>
+                        <div className="mt-3"><CatalogAttributeGrid product={product} /></div>
+                            <div className="mt-3"><CatalogAttributeGrid product={product} /></div>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -1001,17 +1051,32 @@ export default function ProductsPage() {
                               placeholder="Property (e.g. Material)"
                               className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
                             />
-                            <input
-                              type="text"
-                              value={attr.value}
-                              onChange={(e) => {
-                                const newAttrs = [...editAttributes];
-                                newAttrs[index].value = e.target.value;
-                                setEditAttributes(newAttrs);
-                              }}
-                              placeholder="Value (e.g. Recycled PP)"
-                              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
-                            />
+                            {attr.key.trim().toLowerCase() === 'unit' ? (
+                              <select
+                                value={attr.value}
+                                onChange={(e) => {
+                                  const newAttrs = [...editAttributes];
+                                  newAttrs[index].value = e.target.value;
+                                  setEditAttributes(newAttrs);
+                                }}
+                                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                              >
+                                {attr.value && !["nos", "kg", "pack", "Ltr", "Box", "gram", "Ton"].includes(attr.value) ? <option value={attr.value}>{attr.value}</option> : null}
+                                {["nos", "kg", "pack", "Ltr", "Box", "gram", "Ton"].map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                value={attr.value}
+                                onChange={(e) => {
+                                  const newAttrs = [...editAttributes];
+                                  newAttrs[index].value = e.target.value;
+                                  setEditAttributes(newAttrs);
+                                }}
+                                placeholder="Value (e.g. Recycled PP)"
+                                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                              />
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -1085,6 +1150,12 @@ export default function ProductsPage() {
                       <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50/50 p-4">
                         <RichDescriptionRenderer content={selectedProduct.description} />
                       </div>
+                    </div>
+                    <div>
+                      <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
+                        Product Catalog Attributes
+                      </span>
+                      <div className="mt-2"><CatalogAttributeGrid product={selectedProduct} /></div>
                     </div>
                     {((selectedProduct.attributes && Object.keys(selectedProduct.attributes).length > 0) ||
                       selectedProduct.material ||
