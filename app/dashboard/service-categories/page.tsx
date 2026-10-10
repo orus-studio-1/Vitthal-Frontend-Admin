@@ -276,9 +276,9 @@ export default function ServiceCategoriesPage() {
     const options =
       fieldType === 'select'
         ? fieldOptionsStr
-            .split(',')
-            .map((o) => o.trim())
-            .filter(Boolean)
+          .split(',')
+          .map((o) => o.trim())
+          .filter(Boolean)
         : undefined;
 
     const newField: FormFieldDefinition = {
@@ -483,9 +483,9 @@ export default function ServiceCategoriesPage() {
   };
 
   const renderSubcategoryRow = (
-  sub: any,
-  isNested = false,
-  parentName?: string
+    sub: any,
+    isNested = false,
+    parentName?: string
   ) => (
     <div
       key={sub.id}
@@ -549,11 +549,10 @@ export default function ServiceCategoriesPage() {
                   </h5>
 
                   <span
-                    className={`rounded-md px-2 py-1 text-[10px] font-semibold ${
-                      isNested
+                    className={`rounded-md px-2 py-1 text-[10px] font-semibold ${isNested
                         ? "bg-blue-50 text-blue-700"
                         : "bg-slate-100 text-slate-600"
-                    }`}
+                      }`}
                   >
                     {isNested ? "SERVICE" : "SUBCATEGORY"}
                   </span>
@@ -697,9 +696,8 @@ export default function ServiceCategoriesPage() {
               {categories.map((category) => (
                 <article
                   key={category.id}
-                  className={`group flex flex-col justify-between overflow-hidden rounded-2xl border bg-white shadow-xs transition duration-200 ${
-                    category.is_active ? 'border-slate-200 hover:border-blue-400' : 'border-slate-100 opacity-75'
-                  }`}
+                  className={`group flex flex-col justify-between overflow-hidden rounded-2xl border bg-white shadow-xs transition duration-200 ${category.is_active ? 'border-slate-200 hover:border-blue-400' : 'border-slate-100 opacity-75'
+                    }`}
                 >
                   <div>
                     {/* Header S3 Image Banner */}
@@ -716,11 +714,10 @@ export default function ServiceCategoriesPage() {
                         </div>
                       )}
                       <span
-                        className={`absolute right-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-sm ${
-                          category.is_active
+                        className={`absolute right-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-sm ${category.is_active
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}
+                          }`}
                       >
                         {category.is_active ? 'Active' : 'Inactive'}
                       </span>
@@ -810,11 +807,10 @@ export default function ServiceCategoriesPage() {
                   <div className="border-t border-slate-100 px-5 py-3 bg-slate-50/50 flex items-center justify-between">
                     <button
                       onClick={() => handleToggleStatus(category)}
-                      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
-                        category.is_active
+                      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${category.is_active
                           ? 'border-slate-200 text-slate-600 hover:bg-slate-100'
                           : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'
-                      }`}
+                        }`}
                     >
                       {category.is_active ? 'Deactivate' : 'Activate'}
                     </button>
@@ -1001,12 +997,12 @@ export default function ServiceCategoriesPage() {
                         {/* Empty Nested Services State */}
                         {(!Array.isArray(root.children) ||
                           root.children.length === 0) && (
-                          <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
-                            <p className="text-xs text-slate-400">
-                              No services under this subcategory yet.
-                            </p>
-                          </div>
-                        )}
+                            <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
+                              <p className="text-xs text-slate-400">
+                                No services under this subcategory yet.
+                              </p>
+                            </div>
+                          )}
                       </section>
                     ))}
                   </div>
@@ -1024,7 +1020,7 @@ export default function ServiceCategoriesPage() {
                   </div>
                 )}
               </div>
-              </div>
+            </div>
 
             <footer className="border-t border-slate-200 p-4 bg-slate-50 flex justify-end">
               <button
@@ -1065,18 +1061,16 @@ export default function ServiceCategoriesPage() {
                 <button
                   type="button"
                   onClick={() => setSchemaTab('builder')}
-                  className={`px-3.5 py-1 text-xs font-semibold rounded-lg transition ${
-                    schemaTab === 'builder' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-                  }`}
+                  className={`px-3.5 py-1 text-xs font-semibold rounded-lg transition ${schemaTab === 'builder' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                    }`}
                 >
                   <Sliders className="h-3 w-3 inline mr-1" /> Form Builder ({schemaFields.length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setSchemaTab('preview')}
-                  className={`px-3.5 py-1 text-xs font-semibold rounded-lg transition ${
-                    schemaTab === 'preview' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-                  }`}
+                  className={`px-3.5 py-1 text-xs font-semibold rounded-lg transition ${schemaTab === 'preview' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                    }`}
                 >
                   <Eye className="h-3 w-3 inline mr-1" /> Live Client Preview
                 </button>
