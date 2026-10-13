@@ -210,6 +210,12 @@ export const productAPI = {
   getPendingPriceChanges: () =>
     api.get<ApiResponse<any[]>>('/api/products/pending-price/all'),
 
+  getPendingModifications: () =>
+    api.get<ApiResponse<any[]>>('/api/products/pending-modifications/all'),
+
+  reviewPendingModification: (id: string, decision: 'approved' | 'rejected') =>
+    api.put<ApiResponse<any>>(`/api/products/pending-modifications/${id}/review`, { decision }),
+
   reviewPendingPriceChange: (id: string, decision: 'approved' | 'rejected') =>
     api.put<ApiResponse<any>>(`/api/products/pending-price/${id}/review`, { decision }),
 
