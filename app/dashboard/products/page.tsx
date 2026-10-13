@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  SlidersHorizontal,
   CheckCircle2,
   Loader2,
   Package2,
@@ -102,6 +103,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [pendingListings, setPendingListings] = useState<PendingVendorListing[]>([]);
   const [pendingVariants, setPendingVariants] = useState<any[]>([]);
+  const [pendingModifications, setPendingModifications] = useState<any[]>([]);
   const [categoriesOptions, setCategoriesOptions] = useState<any[]>([]);
   const [productTypes, setProductTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,15 +193,17 @@ export default function ProductsPage() {
       setError('');
       
       // Fetch products, pending listings, and pending variants in parallel
-      const [productsRes, listingsRes, variantsRes] = await Promise.all([
+      const [productsRes, listingsRes, variantsRes, modificationsRes] = await Promise.all([
         productAPI.getAll(),
         productAPI.getPendingVendorProducts(),
-        productAPI.getPendingVariants()
+        productAPI.getPendingVariants(),
+        productAPI.getPendingModifications().catch(() => ({ data: { data: [] } }))
       ]);
       
       setProducts(productsRes.data.data);
       setPendingListings(listingsRes.data.data || []);
       setPendingVariants(variantsRes.data.data || []);
+      setPendingModifications(modificationsRes.data?.data || []);
     } catch (productsError) {
       setError(extractApiError(productsError, 'Failed to load products'));
     } finally {
@@ -434,6 +438,17 @@ export default function ProductsPage() {
       }
     } catch (err) {
       setError(extractApiError(err, `Failed to ${decision} vendor listing`));
+    }
+  };
+
+  
+  const handleReviewModification = async (id: string, decision: 'approved' | 'rejected') => {
+    try {
+      setError('');
+      await productAPI.reviewPendingModification(id, decision);
+      await fetchProducts();
+    } catch (reviewError) {
+      setError(extractApiError(reviewError, `Failed to ${decision} product modification`));
     }
   };
 
@@ -756,6 +771,142 @@ export default function ProductsPage() {
           ) : (
             <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-sm text-slate-400">
               Clear! No product variations are awaiting approval.
+            </p>
+          )}
+        </section>
+
+        
+        {/* QUEUE 4: PRODUCT MODIFICATION APPROVALS */}
+        <section className="rounded-[1.75rem] border border-amber-200 bg-white p-6 shadow-[0_12px_32px_rgba(245,158,11,0.06)] relative overflow-hidden">
+          <div className="absolute top-0 right-0 h-32 w-32 bg-amber-500/5 rounded-full blur-2xl -mr-8 -mt-8" />
+          
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 border border-amber-100">
+                <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <SlidersHorizontal className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">🛠️ Product Modification Approval</h2>
+                <p className="text-sm text-slate-500">Pending product specifications / details proposed by vendors.</p>
+              </div>
+            </div>
+            <div className="self-start sm:self-center rounded-full bg-amber-50 border border-amber-200 px-3 py-1 font-mono text-xs font-bold text-amber-700">
+              {pendingModifications.length} Awaiting Review
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+            </div>
+          ) : pendingModifications.length ? (
+            <div className="space-y-3">
+              {pendingModifications.map((mod: any) => {
+                const mods = mod.pending_modifications || {};
+                const proposedPrice = mods.price !== undefined ? mods.price : mod.pending_price;
+                const isPriceChanged = proposedPrice !== null && proposedPrice !== undefined && Number(proposedPrice) !== Number(mod.current_price);
+                const proposedAttrs = mods.attributes || {};
+                const currentAttrs = mods.current_attributes || mod.current_attributes || {};
+
+                const changedAttrsList: Array<{ key: string; current: string; proposed: string }> = [];
+                for (const key of ['size', 'brand', 'grade', 'colour', 'warranty', 'manufacturer', 'unit']) {
+                  const pVal = proposedAttrs[key];
+                  const cVal = currentAttrs[key] || mod[`current_${key}`] || '';
+                  if (pVal !== undefined && String(pVal).trim() !== String(cVal).trim()) {
+                    changedAttrsList.push({
+                      key: key.charAt(0).toUpperCase() + key.slice(1),
+                      current: String(cVal || '—'),
+                      proposed: String(pVal)
+                    });
+                  }
+                }
+
+                return (
+                  <article
+                    key={mod.id}
+                    className="rounded-2xl border border-slate-150 bg-slate-50/50 p-4 hover:border-amber-300 hover:bg-white transition-all shadow-xs duration-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
+                          {mod.vendor_company_name || 'Vendor'}
+                        </span>
+                        <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 uppercase tracking-wider">
+                          Modification Edit
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-slate-900 text-sm">
+                        wants to modify:{' '}
+                        <span
+                          className="text-amber-700 underline cursor-pointer"
+                          onClick={() => handleOpenDrawer({ id: mod.product_id } as Product)}
+                        >
+                          {mod.product_name}
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Seller: {mod.vendor_user_name || mod.vendor_company_name} ({mod.vendor_email})
+                      </p>
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {isPriceChanged && (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
+                            <span className="font-semibold text-emerald-800">Price:</span>
+                            <span className="line-through text-slate-400">₹{mod.current_price}</span>
+                            <span className="font-bold text-emerald-700">➔ ₹{proposedPrice}</span>
+                          </div>
+                        )}
+                        {changedAttrsList.map((attr) => (
+                          <div key={attr.key} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs">
+                            <span className="font-semibold text-blue-800">{attr.key}:</span>
+                            <span className="line-through text-slate-400">{attr.current}</span>
+                            <span className="font-bold text-blue-700">➔ {attr.proposed}</span>
+                          </div>
+                        ))}
+                        {mods.is_moq_changed && (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs">
+                            <span className="font-semibold text-slate-700">MOQ:</span>
+                            <span className="line-through text-slate-400">{mod.current_moq}</span>
+                            <span className="font-bold text-slate-800">➔ {mods.moq}</span>
+                          </div>
+                        )}
+                        {mods.is_stock_changed && (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs">
+                            <span className="font-semibold text-slate-700">Stock:</span>
+                            <span className="line-through text-slate-400">{mod.current_stock_quantity}</span>
+                            <span className="font-bold text-slate-800">➔ {mods.stock_quantity}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => handleReviewModification(mod.id, 'approved')}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleReviewModification(mod.id, 'rejected')}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        Reject
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-sm text-slate-400">
+              Clear! No product modifications are awaiting approval.
             </p>
           )}
         </section>
