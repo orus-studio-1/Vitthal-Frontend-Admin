@@ -77,8 +77,8 @@ function getCatalogValue(product: Product, keys: string[]) {
     }
   }
   if (Array.isArray(product.specifications)) {
-    const spec = product.specifications.find((entry: any) => keys.some((key) => String(entry?.key || entry?.spec_key || '').toLowerCase().replace(/[ _/-]/g, '') === key.toLowerCase().replace(/[ _/-]/g, '')));
-    if (spec?.value || spec?.spec_value) return String(spec.value || spec.spec_value).trim();
+    const spec: any = (product.specifications as any[]).find((entry: any) => keys.some((key: string) => String(entry?.key || entry?.spec_key || '').toLowerCase().replace(/[ _/-]/g, '') === key.toLowerCase().replace(/[ _/-]/g, '')));
+    if (spec && (spec.value || spec.spec_value)) return String(spec.value || spec.spec_value).trim();
   }
   return '—';
 }
