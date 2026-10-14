@@ -372,7 +372,7 @@ export default function PaymentsPage() {
                                         {/* Orders / Services Attached */}
                                         <td className="py-4 pr-2">
                                         <div className="flex max-w-[200px] flex-wrap gap-1">
-                                            {payment.payment_type === "service_maintenance" ? (
+                                            {["service_maintenance", "service_job_inquiry", "service_logistics", "service_goods_ticket"].includes(payment.payment_type || "") ? (
                                             payment.booking_ids?.length ? (
                                                 payment.booking_ids.map((ticketId) => (
                                                 <button
