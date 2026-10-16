@@ -293,6 +293,11 @@ export const vendorAPI = {
 export const adminAPI = {
   getDashboard: () => api.get<ApiResponse<DashboardStats>>('/api/admin/dashboard'),
 
+  getPayoutCommissionSettings: () => api.get<ApiResponse<{ vendor_commission_percentage: string | number; worker_commission_percentage: string | number }>>('/api/admin/payout-commission-settings'),
+
+  updatePayoutCommissionSettings: (vendorCommissionPercentage: number, workerCommissionPercentage: number) =>
+    api.put<ApiResponse<{ vendor_commission_percentage: string | number; worker_commission_percentage: string | number }>>('/api/admin/payout-commission-settings', { vendorCommissionPercentage, workerCommissionPercentage }),
+
   getAnalytics: (period?: string, range?: { startDate?: string; endDate?: string }) =>
     api.get<ApiResponse<AnalyticsData>>('/api/admin/analytics', { params: { period, ...range } }),
 
@@ -330,6 +335,18 @@ export const adminAPI = {
 
   payPayoutRequest: (requestId: string, amount: number, transferReference: string) =>
     api.patch<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/pay`, { amount, transferReference }),
+
+  getWorkerPayoutRequests: () =>
+    api.get<ApiResponse<any[]>>('/api/orders/worker-payout-requests'),
+
+  revealWorkerPayoutBankDetails: (requestId: string) =>
+    api.get<ApiResponse<any>>(`/api/orders/worker-payout-requests/${requestId}/bank-details`),
+
+  rejectWorkerPayoutRequest: (requestId: string, reason: string) =>
+    api.patch<ApiResponse<any>>(`/api/orders/worker-payout-requests/${requestId}/reject`, { reason }),
+
+  payWorkerPayoutRequest: (requestId: string, amount: number, transferReference: string) =>
+    api.patch<ApiResponse<any>>(`/api/orders/worker-payout-requests/${requestId}/pay`, { amount, transferReference }),
 };
 
 export const quotationAPI = {
