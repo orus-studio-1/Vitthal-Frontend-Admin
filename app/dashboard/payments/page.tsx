@@ -20,23 +20,25 @@ import { adminAPI, extractApiError } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 
 interface Payment {
-    id: string;
-    user_id: string;
-    amount: string | number;
-    currency: string;
-    status: string;
-    payment_method: string;
-    razorpay_order_id: string | null;
-    razorpay_payment_id: string | null;
-    razorpay_signature: string | null;
-    order_ids: string[];
-    quotation_request_id: string | null;
-    split_number: number;
-    split_percentage: string | number;
-    created_at: string;
-    updated_at: string;
-    user_name: string;
-    user_email: string;
+  id: string;
+  user_id: string;
+  amount: string | number;
+  currency: string;
+  status: string;
+  payment_method: string;
+  razorpay_order_id: string | null;
+  razorpay_payment_id: string | null;
+  razorpay_signature: string | null;
+  order_ids: string[];
+  booking_ids?: string[];
+  payment_type?: string;
+  quotation_request_id: string | null;
+  split_number: number;
+  split_percentage: string | number;
+  created_at: string;
+  updated_at: string;
+  user_name: string;
+  user_email: string;
 }
 
 export default function PaymentsPage() {
@@ -273,7 +275,7 @@ export default function PaymentsPage() {
                                     <th className="pb-3 text-center">Status</th>
                                     <th className="pb-3">Razorpay Order / Payment ID</th>
                                     <th className="pb-3">Split</th>
-                                    <th className="pb-3 pr-2">Orders Attached</th>
+                                    <th className="pb-3 pr-2">Order/Service Attachment</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -367,25 +369,53 @@ export default function PaymentsPage() {
                                             <p className="font-semibold text-slate-900">{Number(payment.split_percentage).toFixed(0)}%</p>
                                             <p className="text-[10px] text-slate-400 uppercase mt-0.5">Installment {payment.split_number}</p>
                                         </td>
-
-                                        {/* Orders Attached */}
+                                        {/* Orders / Services Attached */}
                                         <td className="py-4 pr-2">
-                                            <div className="flex flex-wrap gap-1 max-w-[180px]">
-                                                {payment.order_ids && payment.order_ids.length > 0 ? (
-                                                    payment.order_ids.map((orderId) => (
-                                                        <button
-                                                            key={orderId}
-                                                            onClick={() => router.push(`/dashboard/orders?id=${orderId}`)}
-                                                            className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 transition-all px-2 py-1 font-mono text-[10px] text-slate-600"
-                                                        >
-                                                            #{orderId.split('-')[0]}
-                                                            <ArrowUpRight className="h-2.5 w-2.5" />
-                                                        </button>
-                                                    ))
-                                                ) : (
-                                                    <span className="text-slate-400 text-xs italic">Direct Checkout</span>
-                                                )}
-                                            </div>
+                                        <div className="flex max-w-[200px] flex-wrap gap-1">
+                                            {["service_maintenance", "service_job_inquiry", "service_logistics", "service_goods_ticket"].includes(payment.payment_type || "") ? (
+                                            payment.booking_ids?.length ? (
+                                                payment.booking_ids.map((ticketId) => (
+                                                <button
+                                                    key={ticketId}
+                                                    type="button"
+                                                    onClick={() =>
+                                                    router.push(
+                                                        `/dashboard/service-hub/${ticketId}`
+                                                    )
+                                                    }
+                                                    className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 font-mono text-[10px] text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
+                                                    title="Open service ticket"
+                                                >
+                                                    Service #{ticketId.split("-")[0]}
+                                                    <ArrowUpRight className="h-2.5 w-2.5" />
+                                                </button>
+                                                ))
+                                            ) : (
+                                                <span className="text-xs italic text-amber-600">
+                                                No service ticket linked
+                                                </span>
+                                            )
+                                            ) : payment.order_ids?.length ? (
+                                            payment.order_ids.map((orderId) => (
+                                                <button
+                                                key={orderId}
+                                                type="button"
+                                                onClick={() =>
+                                                    router.push(`/dashboard/orders?id=${orderId}`)
+                                                }
+                                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[10px] text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+                                                title="Open order"
+                                                >
+                                                #{orderId.split("-")[0]}
+                                                <ArrowUpRight className="h-2.5 w-2.5" />
+                                                </button>
+                                            ))
+                                            ) : (
+                                            <span className="text-xs italic text-slate-400">
+                                                Direct Checkout
+                                            </span>
+                                            )}
+                                        </div>
                                         </td>
                                     </tr>
                                 ))}
