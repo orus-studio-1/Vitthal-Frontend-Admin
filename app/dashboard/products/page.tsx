@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  SlidersHorizontal,
   CheckCircle2,
   Loader2,
   Package2,
@@ -55,6 +56,45 @@ type EditorRow = { id: string; key: string; value: string };
 type VariantEditor = { id: string; persistedId?: string; name: string; sku: string; properties: EditorRow[] };
 
 const editorId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const CATALOG_FIELDS: Array<{ label: string; keys: string[] }> = [
+  { label: 'Size', keys: ['size'] },
+  { label: 'Brand', keys: ['brand', 'brand_name', 'product_brand'] },
+  { label: 'Grade', keys: ['grade'] },
+  { label: 'Colour', keys: ['colour', 'color'] },
+  { label: 'Warranty / Guarantee', keys: ['warranty', 'warranty_guarantee', 'guarantee'] },
+  { label: 'Manufacturer', keys: ['manufacturer', 'manufactured_by'] },
+  { label: 'Unit', keys: ['unit', 'uom', 'unit_of_measure'] },
+];
+
+function getCatalogValue(product: Product, keys: string[]) {
+  const sources: Array<Record<string, unknown>> = [product as unknown as Record<string, unknown>, product.attributes || {}];
+  if (product.specifications && !Array.isArray(product.specifications)) sources.push(product.specifications as Record<string, unknown>);
+  for (const source of sources) {
+    const normalized = Object.fromEntries(Object.entries(source).map(([key, value]) => [key.toLowerCase().replace(/[ _/-]/g, ''), value]));
+    for (const key of keys) {
+      const value = normalized[key.toLowerCase().replace(/[ _/-]/g, '')];
+      if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+    }
+  }
+  if (Array.isArray(product.specifications)) {
+    const spec: any = (product.specifications as any[]).find((entry: any) => keys.some((key: string) => String(entry?.key || entry?.spec_key || '').toLowerCase().replace(/[ _/-]/g, '') === key.toLowerCase().replace(/[ _/-]/g, '')));
+    if (spec && (spec.value || spec.spec_value)) return String(spec.value || spec.spec_value).trim();
+  }
+  return '—';
+}
+
+function CatalogAttributeGrid({ product }: { product: Product }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-3">
+      {CATALOG_FIELDS.map(({ label, keys }) => (
+        <div key={label} className="min-w-0">
+          <p className="text-[10px] text-slate-500">{label}</p>
+          <p className="truncate text-xs font-semibold text-slate-800">{getCatalogValue(product, keys)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function ProductsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -123,7 +163,14 @@ export default function ProductsPage() {
     setEditItemCode(product.item_code || '');
     setEditQuotationLimit(product.quotation_limit ? String(product.quotation_limit) : '');
     setEditIsActive(product.is_active !== false);
-    setEditAttributes(Object.entries(product.attributes || {}).map(([key, value]) => ({
+    const editAttributeValues = { ...(product.attributes || {}) } as Record<string, unknown>;
+    CATALOG_FIELDS.forEach(({ label, keys }) => {
+      const value = getCatalogValue(product, keys);
+      if (value !== '—' && !Object.keys(editAttributeValues).some((key) => key.toLowerCase().replace(/[ _/-]/g, '') === label.toLowerCase().replace(/[ _/-]/g, ''))) {
+        editAttributeValues[label] = value;
+      }
+    });
+    setEditAttributes(Object.entries(editAttributeValues).map(([key, value]) => ({
       id: editorId('attr'), key, value: String(value ?? ''),
     })));
     setSpecificationDrafts((product.detailed_specifications || []).map((spec) => ({
@@ -150,13 +197,13 @@ export default function ProductsPage() {
         productAPI.getAll(),
         productAPI.getPendingVendorProducts(),
         productAPI.getPendingVariants(),
-        productAPI.getPendingProductModifications()
+        productAPI.getPendingModifications().catch(() => ({ data: { data: [] } }))
       ]);
       
       setProducts(productsRes.data.data);
       setPendingListings(listingsRes.data.data || []);
       setPendingVariants(variantsRes.data.data || []);
-      setPendingModifications(modificationsRes.data.data || []);
+      setPendingModifications(modificationsRes.data?.data || []);
     } catch (productsError) {
       setError(extractApiError(productsError, 'Failed to load products'));
     } finally {
@@ -394,13 +441,14 @@ export default function ProductsPage() {
     }
   };
 
-  const handleReviewModification = async (vendorProductId: string, decision: 'approved' | 'rejected') => {
+  
+  const handleReviewModification = async (id: string, decision: 'approved' | 'rejected') => {
     try {
       setError('');
-      await productAPI.reviewProductModification(vendorProductId, decision);
+      await productAPI.reviewPendingModification(id, decision);
       await fetchProducts();
-    } catch (err) {
-      setError(extractApiError(err, `Failed to ${decision} product changes`));
+    } catch (reviewError) {
+      setError(extractApiError(reviewError, `Failed to ${decision} product modification`));
     }
   };
 
@@ -498,6 +546,7 @@ export default function ProductsPage() {
                     <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
                       {product.description || 'No description provided.'}
                     </p>
+                    <CatalogAttributeGrid product={product} />
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                     <button
@@ -787,6 +836,142 @@ export default function ProductsPage() {
           )}
         </section>
 
+        
+        {/* QUEUE 4: PRODUCT MODIFICATION APPROVALS */}
+        <section className="rounded-[1.75rem] border border-amber-200 bg-white p-6 shadow-[0_12px_32px_rgba(245,158,11,0.06)] relative overflow-hidden">
+          <div className="absolute top-0 right-0 h-32 w-32 bg-amber-500/5 rounded-full blur-2xl -mr-8 -mt-8" />
+          
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 border border-amber-100">
+                <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <SlidersHorizontal className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">🛠️ Product Modification Approval</h2>
+                <p className="text-sm text-slate-500">Pending product specifications / details proposed by vendors.</p>
+              </div>
+            </div>
+            <div className="self-start sm:self-center rounded-full bg-amber-50 border border-amber-200 px-3 py-1 font-mono text-xs font-bold text-amber-700">
+              {pendingModifications.length} Awaiting Review
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+            </div>
+          ) : pendingModifications.length ? (
+            <div className="space-y-3">
+              {pendingModifications.map((mod: any) => {
+                const mods = mod.pending_modifications || {};
+                const proposedPrice = mods.price !== undefined ? mods.price : mod.pending_price;
+                const isPriceChanged = proposedPrice !== null && proposedPrice !== undefined && Number(proposedPrice) !== Number(mod.current_price);
+                const proposedAttrs = mods.attributes || {};
+                const currentAttrs = mods.current_attributes || mod.current_attributes || {};
+
+                const changedAttrsList: Array<{ key: string; current: string; proposed: string }> = [];
+                for (const key of ['size', 'brand', 'grade', 'colour', 'warranty', 'manufacturer', 'unit']) {
+                  const pVal = proposedAttrs[key];
+                  const cVal = currentAttrs[key] || mod[`current_${key}`] || '';
+                  if (pVal !== undefined && String(pVal).trim() !== String(cVal).trim()) {
+                    changedAttrsList.push({
+                      key: key.charAt(0).toUpperCase() + key.slice(1),
+                      current: String(cVal || '—'),
+                      proposed: String(pVal)
+                    });
+                  }
+                }
+
+                return (
+                  <article
+                    key={mod.id}
+                    className="rounded-2xl border border-slate-150 bg-slate-50/50 p-4 hover:border-amber-300 hover:bg-white transition-all shadow-xs duration-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
+                          {mod.vendor_company_name || 'Vendor'}
+                        </span>
+                        <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 uppercase tracking-wider">
+                          Modification Edit
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-slate-900 text-sm">
+                        wants to modify:{' '}
+                        <span
+                          className="text-amber-700 underline cursor-pointer"
+                          onClick={() => handleOpenDrawer({ id: mod.product_id } as Product)}
+                        >
+                          {mod.product_name}
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Seller: {mod.vendor_user_name || mod.vendor_company_name} ({mod.vendor_email})
+                      </p>
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {isPriceChanged && (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
+                            <span className="font-semibold text-emerald-800">Price:</span>
+                            <span className="line-through text-slate-400">₹{mod.current_price}</span>
+                            <span className="font-bold text-emerald-700">➔ ₹{proposedPrice}</span>
+                          </div>
+                        )}
+                        {changedAttrsList.map((attr) => (
+                          <div key={attr.key} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs">
+                            <span className="font-semibold text-blue-800">{attr.key}:</span>
+                            <span className="line-through text-slate-400">{attr.current}</span>
+                            <span className="font-bold text-blue-700">➔ {attr.proposed}</span>
+                          </div>
+                        ))}
+                        {mods.is_moq_changed && (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs">
+                            <span className="font-semibold text-slate-700">MOQ:</span>
+                            <span className="line-through text-slate-400">{mod.current_moq}</span>
+                            <span className="font-bold text-slate-800">➔ {mods.moq}</span>
+                          </div>
+                        )}
+                        {mods.is_stock_changed && (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs">
+                            <span className="font-semibold text-slate-700">Stock:</span>
+                            <span className="line-through text-slate-400">{mod.current_stock_quantity}</span>
+                            <span className="font-bold text-slate-800">➔ {mods.stock_quantity}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => handleReviewModification(mod.id, 'approved')}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleReviewModification(mod.id, 'rejected')}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        Reject
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-sm text-slate-400">
+              Clear! No product modifications are awaiting approval.
+            </p>
+          )}
+        </section>
+
         {/* Master Catalog List (Lower Priority / Reference) */}
         <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_12px_32px_rgba(96,82,62,0.08)] backdrop-blur-sm">
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -838,6 +1023,7 @@ export default function ProductsPage() {
                             <p className="text-xs text-slate-500 mt-0.5">
                               {categoriesOptions.find(c => c.id === product.category)?.label || product.category || 'Unclassified'} • {product.product_type} • {product.vendor_count || 0} sellers
                             </p>
+                            <div className="mt-3"><CatalogAttributeGrid product={product} /></div>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -885,15 +1071,17 @@ export default function ProductsPage() {
                             <p className="text-xs text-slate-500 mt-0.5">
                               Submitted by: <span className="font-semibold text-slate-700">{product.creator_vendor_name || product.creator_name || 'Vendor'}</span> • {categoriesOptions.find(c => c.id === product.category)?.label || product.category || 'Unclassified'} • {product.product_type}
                             </p>
-                            <span className={`inline-block rounded-full px-2.5 py-0.5 mt-2 text-[10px] font-bold uppercase border ${
+                        <span className={`inline-block rounded-full px-2.5 py-0.5 mt-2 text-[10px] font-bold uppercase border ${
                               product.approval_status === 'approved'
                                 ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
                                 : product.approval_status === 'rejected'
                                 ? 'bg-red-50 border-red-100 text-red-700'
                                 : 'bg-amber-50 border-amber-100 text-amber-700'
                             }`}>
-                              {product.approval_status}
-                            </span>
+                          {product.approval_status}
+                        </span>
+                        <div className="mt-3"><CatalogAttributeGrid product={product} /></div>
+                            <div className="mt-3"><CatalogAttributeGrid product={product} /></div>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -1075,17 +1263,32 @@ export default function ProductsPage() {
                               placeholder="Property (e.g. Material)"
                               className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
                             />
-                            <input
-                              type="text"
-                              value={attr.value}
-                              onChange={(e) => {
-                                const newAttrs = [...editAttributes];
-                                newAttrs[index].value = e.target.value;
-                                setEditAttributes(newAttrs);
-                              }}
-                              placeholder="Value (e.g. Recycled PP)"
-                              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
-                            />
+                            {attr.key.trim().toLowerCase() === 'unit' ? (
+                              <select
+                                value={attr.value}
+                                onChange={(e) => {
+                                  const newAttrs = [...editAttributes];
+                                  newAttrs[index].value = e.target.value;
+                                  setEditAttributes(newAttrs);
+                                }}
+                                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                              >
+                                {attr.value && !["nos", "kg", "pack", "Ltr", "Box", "gram", "Ton"].includes(attr.value) ? <option value={attr.value}>{attr.value}</option> : null}
+                                {["nos", "kg", "pack", "Ltr", "Box", "gram", "Ton"].map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                value={attr.value}
+                                onChange={(e) => {
+                                  const newAttrs = [...editAttributes];
+                                  newAttrs[index].value = e.target.value;
+                                  setEditAttributes(newAttrs);
+                                }}
+                                placeholder="Value (e.g. Recycled PP)"
+                                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                              />
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -1159,6 +1362,12 @@ export default function ProductsPage() {
                       <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50/50 p-4">
                         <RichDescriptionRenderer content={selectedProduct.description} />
                       </div>
+                    </div>
+                    <div>
+                      <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
+                        Product Catalog Attributes
+                      </span>
+                      <div className="mt-2"><CatalogAttributeGrid product={selectedProduct} /></div>
                     </div>
                     {((selectedProduct.attributes && Object.keys(selectedProduct.attributes).length > 0) ||
                       selectedProduct.material ||

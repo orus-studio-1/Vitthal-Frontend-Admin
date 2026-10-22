@@ -213,11 +213,23 @@ export const productAPI = {
   getPendingProductModifications: () =>
     api.get<ApiResponse<any[]>>('/api/products/pending-modifications/all'),
 
-  reviewProductModification: (id: string, decision: 'approved' | 'rejected') =>
-    api.put<ApiResponse<any>>(`/api/products/pending-modifications/${id}/review`, { decision }),
+  reviewProductModification: (
+    id: string,
+    decision: 'approved' | 'rejected'
+  ) =>
+    api.put<ApiResponse<any>>(
+      `/api/products/pending-modifications/${id}/review`,
+      { decision }
+    ),
 
-  reviewPendingPriceChange: (id: string, decision: 'approved' | 'rejected') =>
-    api.put<ApiResponse<any>>(`/api/products/pending-price/${id}/review`, { decision }),
+  reviewPendingPriceChange: (
+    id: string,
+    decision: 'approved' | 'rejected'
+  ) =>
+    api.put<ApiResponse<any>>(
+      `/api/products/pending-price/${id}/review`,
+      { decision }
+    ),
 
   getPendingVariants: () =>
     api.get<ApiResponse<any[]>>('/api/products/pending-variants/all'),
