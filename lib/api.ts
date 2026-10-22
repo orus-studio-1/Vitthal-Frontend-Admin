@@ -210,14 +210,26 @@ export const productAPI = {
   getPendingPriceChanges: () =>
     api.get<ApiResponse<any[]>>('/api/products/pending-price/all'),
 
-  getPendingModifications: () =>
+  getPendingProductModifications: () =>
     api.get<ApiResponse<any[]>>('/api/products/pending-modifications/all'),
 
-  reviewPendingModification: (id: string, decision: 'approved' | 'rejected') =>
-    api.put<ApiResponse<any>>(`/api/products/pending-modifications/${id}/review`, { decision }),
+  reviewProductModification: (
+    id: string,
+    decision: 'approved' | 'rejected'
+  ) =>
+    api.put<ApiResponse<any>>(
+      `/api/products/pending-modifications/${id}/review`,
+      { decision }
+    ),
 
-  reviewPendingPriceChange: (id: string, decision: 'approved' | 'rejected') =>
-    api.put<ApiResponse<any>>(`/api/products/pending-price/${id}/review`, { decision }),
+  reviewPendingPriceChange: (
+    id: string,
+    decision: 'approved' | 'rejected'
+  ) =>
+    api.put<ApiResponse<any>>(
+      `/api/products/pending-price/${id}/review`,
+      { decision }
+    ),
 
   getPendingVariants: () =>
     api.get<ApiResponse<any[]>>('/api/products/pending-variants/all'),
@@ -293,11 +305,6 @@ export const vendorAPI = {
 export const adminAPI = {
   getDashboard: () => api.get<ApiResponse<DashboardStats>>('/api/admin/dashboard'),
 
-  getPayoutCommissionSettings: () => api.get<ApiResponse<{ vendor_commission_percentage: string | number; worker_commission_percentage: string | number }>>('/api/admin/payout-commission-settings'),
-
-  updatePayoutCommissionSettings: (vendorCommissionPercentage: number, workerCommissionPercentage: number) =>
-    api.put<ApiResponse<{ vendor_commission_percentage: string | number; worker_commission_percentage: string | number }>>('/api/admin/payout-commission-settings', { vendorCommissionPercentage, workerCommissionPercentage }),
-
   getAnalytics: (period?: string, range?: { startDate?: string; endDate?: string }) =>
     api.get<ApiResponse<AnalyticsData>>('/api/admin/analytics', { params: { period, ...range } }),
 
@@ -324,29 +331,8 @@ export const adminAPI = {
   getPayouts: () =>
     api.get<ApiResponse<any[]>>('/api/orders/payouts'),
 
-  getPayoutRequests: () =>
-    api.get<ApiResponse<any[]>>('/api/orders/payout-requests'),
-
-  revealPayoutBankDetails: (requestId: string) =>
-    api.get<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/bank-details`),
-
-  rejectPayoutRequest: (requestId: string, reason: string) =>
-    api.patch<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/reject`, { reason }),
-
-  payPayoutRequest: (requestId: string, amount: number, transferReference: string) =>
-    api.patch<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/pay`, { amount, transferReference }),
-
-  getWorkerPayoutRequests: () =>
-    api.get<ApiResponse<any[]>>('/api/orders/worker-payout-requests'),
-
-  revealWorkerPayoutBankDetails: (requestId: string) =>
-    api.get<ApiResponse<any>>(`/api/orders/worker-payout-requests/${requestId}/bank-details`),
-
-  rejectWorkerPayoutRequest: (requestId: string, reason: string) =>
-    api.patch<ApiResponse<any>>(`/api/orders/worker-payout-requests/${requestId}/reject`, { reason }),
-
-  payWorkerPayoutRequest: (requestId: string, amount: number, transferReference: string) =>
-    api.patch<ApiResponse<any>>(`/api/orders/worker-payout-requests/${requestId}/pay`, { amount, transferReference }),
+  updatePayout: (orderId: string, payoutPercentage: number, notes?: string) =>
+    api.put<ApiResponse<any>>(`/api/orders/payouts/${orderId}`, { payoutPercentage, notes }),
 };
 
 export const quotationAPI = {
@@ -524,14 +510,8 @@ export const serviceHubAPI = {
   deleteCategory: (id: string) =>
     api.delete<{ success: boolean; message: string }>(`/api/service-hub/categories/${id}`),
 
-  createSubcategory: (data: { category_id: string; parent_id?: string | null; name: string; description?: string; form_schema?: any[] }) =>
-    api.post<{ success: boolean; message: string; subcategory: any }>('/api/service-hub/subcategories', {
-      category_id: data.category_id,
-      parent_id: data.parent_id || null,
-      name: data.name,
-      description: data.description,
-      form_schema: data.form_schema || [],
-    }),
+  createSubcategory: (data: { category_id: string; name: string; description?: string; form_schema?: any[] }) =>
+    api.post<{ success: boolean; message: string; subcategory: any }>('/api/service-hub/subcategories', data),
 
   updateSubcategory: (id: string, data: { name?: string; description?: string; form_schema?: any[] }) =>
     api.put<{ success: boolean; message: string; subcategory: any }>(`/api/service-hub/subcategories/${id}`, data),

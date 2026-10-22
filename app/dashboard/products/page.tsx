@@ -683,6 +683,67 @@ export default function ProductsPage() {
           )}
         </section>
 
+        <section className="rounded-[1.75rem] border border-amber-200 bg-white p-6 shadow-[0_12px_32px_rgba(217,119,6,0.06)]">
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Product Edit Approvals</h2>
+              <p className="text-sm text-slate-500">Review vendor changes before updated product details become live.</p>
+            </div>
+            <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-mono text-xs font-bold text-amber-800">{pendingModifications.length} Under Review</div>
+          </div>
+          {loading ? <div className="flex justify-center py-8"><Loader2 className="h-7 w-7 animate-spin text-amber-600" /></div> : pendingModifications.length ? (
+            <div className="space-y-4">
+              {pendingModifications.map((request) => {
+                const changes = request.pending_modifications || {};
+                const fields: Array<[string, unknown, unknown, boolean]> = [
+                  ['Product name', changes.current_product_fields?.name, changes.name, Boolean(changes.has_product_field_changes && changes.name !== undefined)],
+                  ['Description', changes.current_product_fields?.description, changes.description, Boolean(changes.has_product_field_changes && changes.description !== undefined)],
+                  ['Category', changes.current_product_fields?.category, changes.category, Boolean(changes.has_product_field_changes && changes.category !== undefined)],
+                  ['Product type', changes.current_product_fields?.product_type, changes.product_type, Boolean(changes.has_product_field_changes && changes.product_type !== undefined)],
+                  ['Item code', changes.current_product_fields?.item_code, changes.item_code, Boolean(changes.has_product_field_changes && changes.item_code !== undefined)],
+                  ['Price', changes.current_price, changes.price ?? request.pending_price, Boolean(changes.is_price_changed || request.pending_price !== null)],
+                  ['MOQ', changes.current_moq, changes.moq, Boolean(changes.is_moq_changed)],
+                  ['Stock', changes.current_stock_quantity, changes.stock_quantity, Boolean(changes.is_stock_changed)],
+                  ['GST', changes.current_gst_percentage, changes.gst_percentage, Boolean(changes.is_gst_changed)],
+                ];
+                const changedAttributes = Object.keys(changes.attributes || {}).filter((key) => changes.attributes[key] !== changes.current_attributes?.[key]);
+                return (
+                  <article key={request.vendor_product_id} className="rounded-2xl border border-amber-100 bg-amber-50/30 p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h3 className="font-bold text-slate-900">{request.product_name || 'Product'}{request.variant_sku ? ` · ${request.variant_sku}` : ''}</h3>
+                        <p className="mt-1 text-xs text-slate-500">Vendor: {request.vendor_company_name || request.vendor_user_name || 'Vendor'} · {request.vendor_email || ''}</p>
+                      </div>
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Under Approval</span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {fields.filter(([, , , changed]) => changed).map(([label, previous, proposed]) => (
+                        <div key={label} className="rounded-xl border border-slate-100 bg-white p-3 text-xs">
+                          <p className="font-semibold text-slate-500">{label}</p>
+                          <p className="mt-1 text-slate-400 line-through">{previous === null || previous === undefined || previous === '' ? '—' : String(previous)}</p>
+                          <p className="mt-1 font-semibold text-slate-900">{proposed === null || proposed === undefined || proposed === '' ? '—' : String(proposed)}</p>
+                        </div>
+                      ))}
+                      {changedAttributes.map((key) => (
+                        <div key={key} className="rounded-xl border border-slate-100 bg-white p-3 text-xs">
+                          <p className="font-semibold capitalize text-slate-500">{key.replace(/_/g, ' ')}</p>
+                          <p className="mt-1 text-slate-400 line-through">{String(changes.current_attributes?.[key] ?? '—')}</p>
+                          <p className="mt-1 font-semibold text-slate-900">{String(changes.attributes[key] ?? '—')}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {changes.has_specification_changes && <div className="mt-3 rounded-xl border border-slate-100 bg-white p-3 text-xs"><p className="font-semibold text-slate-500">Proposed specifications</p><pre className="mt-2 whitespace-pre-wrap text-slate-800">{JSON.stringify(changes.specifications || {}, null, 2)}</pre></div>}
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button onClick={() => handleReviewModification(request.vendor_product_id, 'rejected')} className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50"><XCircle className="h-4 w-4" /> Reject</button>
+                      <button onClick={() => handleReviewModification(request.vendor_product_id, 'approved')} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"><CheckCircle2 className="h-4 w-4" /> Approve changes</button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">No product edits are waiting for review.</p>}
+        </section>
+
         {/* ✨ QUEUE 3: PRODUCT VARIATION APPROVALS (HIGH PRIORITY) */}
         <section className="rounded-[1.75rem] border border-violet-200 bg-white p-6 shadow-[0_12px_32px_rgba(139,92,246,0.06)] relative overflow-hidden">
           <div className="absolute top-0 right-0 h-32 w-32 bg-violet-500/5 rounded-full blur-2xl -mr-8 -mt-8" />
