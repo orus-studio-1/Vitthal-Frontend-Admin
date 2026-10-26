@@ -213,7 +213,19 @@ export const productAPI = {
   getPendingProductModifications: () =>
     api.get<ApiResponse<any[]>>('/api/products/pending-modifications/all'),
 
+  getPendingModifications: () =>
+    api.get<ApiResponse<any[]>>('/api/products/pending-modifications/all'),
+
   reviewProductModification: (
+    id: string,
+    decision: 'approved' | 'rejected'
+  ) =>
+    api.put<ApiResponse<any>>(
+      `/api/products/pending-modifications/${id}/review`,
+      { decision }
+    ),
+
+  reviewPendingModification: (
     id: string,
     decision: 'approved' | 'rejected'
   ) =>
@@ -333,6 +345,36 @@ export const adminAPI = {
 
   updatePayout: (orderId: string, payoutPercentage: number, notes?: string) =>
     api.put<ApiResponse<any>>(`/api/orders/payouts/${orderId}`, { payoutPercentage, notes }),
+
+  getPayoutRequests: () =>
+    api.get<ApiResponse<any[]>>('/api/orders/payout-requests'),
+
+  getWorkerPayoutRequests: () =>
+    api.get<ApiResponse<any[]>>('/api/orders/worker-payout-requests'),
+
+  getPayoutCommissionSettings: () =>
+    api.get<ApiResponse<{ vendor_commission_percentage: number | string; worker_commission_percentage: number | string }>>('/api/admin/payout-commission-settings'),
+
+  updatePayoutCommissionSettings: (vendorCommissionPercentage: number, workerCommissionPercentage: number) =>
+    api.put<ApiResponse<{ vendor_commission_percentage: number | string; worker_commission_percentage: number | string }>>('/api/admin/payout-commission-settings', { vendorCommissionPercentage, workerCommissionPercentage }),
+
+  revealPayoutBankDetails: (requestId: string) =>
+    api.get<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/bank-details`),
+
+  rejectPayoutRequest: (requestId: string, reason: string) =>
+    api.patch<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/reject`, { reason }),
+
+  payPayoutRequest: (requestId: string, amount: number, transferReference: string) =>
+    api.patch<ApiResponse<any>>(`/api/orders/payout-requests/${requestId}/pay`, { amount, transferReference }),
+
+  revealWorkerPayoutBankDetails: (requestId: string) =>
+    api.get<ApiResponse<any>>(`/api/orders/worker-payout-requests/${requestId}/bank-details`),
+
+  rejectWorkerPayoutRequest: (requestId: string, reason: string) =>
+    api.patch<ApiResponse<any>>(`/api/orders/worker-payout-requests/${requestId}/reject`, { reason }),
+
+  payWorkerPayoutRequest: (requestId: string, amount: number, transferReference: string) =>
+    api.patch<ApiResponse<any>>(`/api/orders/worker-payout-requests/${requestId}/pay`, { amount, transferReference }),
 };
 
 export const quotationAPI = {
@@ -516,10 +558,10 @@ export const serviceHubAPI = {
   deleteCategory: (id: string) =>
     api.delete<{ success: boolean; message: string }>(`/api/service-hub/categories/${id}`),
 
-  createSubcategory: (data: { category_id: string; name: string; description?: string; form_schema?: any[] }) =>
+  createSubcategory: (data: { category_id: string; parent_id?: string | null; name: string; description?: string; form_schema?: any[] }) =>
     api.post<{ success: boolean; message: string; subcategory: any }>('/api/service-hub/subcategories', data),
 
-  updateSubcategory: (id: string, data: { name?: string; description?: string; form_schema?: any[] }) =>
+  updateSubcategory: (id: string, data: { name?: string; description?: string; form_schema?: any[]; parent_id?: string | null }) =>
     api.put<{ success: boolean; message: string; subcategory: any }>(`/api/service-hub/subcategories/${id}`, data),
 
   deleteSubcategory: (id: string) =>
