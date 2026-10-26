@@ -40,6 +40,7 @@ export default function ServicesPage() {
   // Service Offerings states (for detail drawer)
   const [offerings, setOfferings] = useState<any[]>([]);
   const [offeringsLoading, setOfferingsLoading] = useState(false);
+  const [pendingModifications, setPendingModifications] = useState<any[]>([]);
 
   // Modals / Drawer state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -84,6 +85,8 @@ export default function ServicesPage() {
       if (response.data?.data) {
         setServices(response.data.data);
       }
+      const pendingResponse = await serviceAPI.getPendingModifications();
+      setPendingModifications(pendingResponse.data?.data || []);
     } catch (err) {
       setError(extractApiError(err, 'Failed to load services'));
     } finally {
@@ -114,6 +117,19 @@ export default function ServicesPage() {
       await fetchServices();
     } catch (err) {
       setError(extractApiError(err, 'Failed to delete service'));
+    }
+  };
+
+  const handleReviewModification = async (id: string, decision: 'approved' | 'rejected') => {
+    try {
+      setError('');
+      await serviceAPI.reviewModification(id, decision);
+      setSuccess(`Vendor service edit ${decision}.`);
+      const response = await serviceAPI.getPendingModifications();
+      setPendingModifications(response.data?.data || []);
+      await fetchServices();
+    } catch (err) {
+      setError(extractApiError(err, `Failed to ${decision} service edit`));
     }
   };
 
@@ -244,6 +260,49 @@ export default function ServicesPage() {
             </p>
           </div>
         </div>
+
+        <section className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Vendor Service Edit Approvals</h2>
+              <p className="text-sm text-slate-500">Review proposed service and offering changes before they become live.</p>
+            </div>
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{pendingModifications.length} pending</span>
+          </div>
+          {pendingModifications.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">No vendor service edits are waiting for approval.</p>
+          ) : (
+            <div className="space-y-3">
+              {pendingModifications.map((request) => {
+                const changes = request.pending_modifications || {};
+                const allFields = [
+                  ['Service name', request.current_service_name, changes.service_name],
+                  ['Description', request.current_service_description, changes.service_description],
+                  ['Price', request.current_price, changes.price],
+                  ['Pricing type', request.current_pricing_type, changes.pricing_type],
+                  ['MOQ', request.current_moq, changes.moq],
+                  ['Active', request.current_is_active, changes.is_active],
+                  ['Delivery days', request.current_delivery_days, changes.delivery_days],
+                  ['Token percentage', request.current_token_percentage, changes.token_percentage],
+                ] as Array<[string, unknown, unknown]>;
+                const fields = allFields.filter(([, , proposed]) => proposed !== undefined);
+                return <article key={request.vendor_service_id} className="rounded-2xl border border-amber-100 bg-amber-50/30 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div><h3 className="font-semibold text-slate-900">{request.current_service_name}</h3><p className="text-xs text-slate-500">Vendor: {request.vendor_company_name || request.vendor_user_name} · {request.vendor_email}</p></div>
+                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-800">Under approval</span>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {fields.map(([label, current, proposed]) => <div key={label} className="rounded-xl border border-slate-100 bg-white p-3 text-xs"><p className="font-semibold text-slate-500">{label}</p><p className="mt-1 text-slate-400 line-through">{current == null || current === '' ? '—' : String(current)}</p><p className="mt-1 font-semibold text-slate-900">{proposed == null || proposed === '' ? '—' : String(proposed)}</p></div>)}
+                  </div>
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button onClick={() => void handleReviewModification(request.vendor_service_id, 'rejected')} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"><XCircle className="h-4 w-4" />Reject</button>
+                    <button onClick={() => void handleReviewModification(request.vendor_service_id, 'approved')} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"><CheckCircle2 className="h-4 w-4" />Approve changes</button>
+                  </div>
+                </article>;
+              })}
+            </div>
+          )}
+        </section>
 
         {/* Alert Notifications */}
         {error && (
