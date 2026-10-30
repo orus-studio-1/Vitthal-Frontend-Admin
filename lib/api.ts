@@ -563,11 +563,17 @@ export const serviceHubAPI = {
   getCategories: () =>
     api.get<{ success: boolean; categories: any[] }>('/api/service-hub/categories'),
 
+  // FormData must go as multipart: with the client's default JSON Content-Type, axios would
+  // turn it into JSON and drop the image file.
   createCategory: (data: any) =>
-    api.post<{ success: boolean; message: string; category: any }>('/api/service-hub/categories', data),
+    api.post<{ success: boolean; message: string; category: any }>('/api/service-hub/categories', data, data instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    } : undefined),
 
   updateCategory: (id: string, data: any) =>
-    api.put<{ success: boolean; message: string; category: any }>(`/api/service-hub/categories/${id}`, data),
+    api.put<{ success: boolean; message: string; category: any }>(`/api/service-hub/categories/${id}`, data, data instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    } : undefined),
 
   deleteCategory: (id: string) =>
     api.delete<{ success: boolean; message: string }>(`/api/service-hub/categories/${id}`),

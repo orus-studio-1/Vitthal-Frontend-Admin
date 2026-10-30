@@ -34,7 +34,7 @@ import {
   ListPlus,
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
-import { extractApiError, productAPI, serviceHubAPI } from '../../../lib/api';
+import { extractApiError, serviceHubAPI } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 
 export interface FormFieldDefinition {
@@ -350,7 +350,7 @@ export default function ServiceCategoriesPage() {
       setError('');
       setSuccess('');
       const formData = buildCategoryFormData();
-      await productAPI.createCategory(formData);
+      await serviceHubAPI.createCategory(formData);
       setSuccess('Service category created successfully.');
       setIsAddOpen(false);
       await fetchCategories();
@@ -371,7 +371,7 @@ export default function ServiceCategoriesPage() {
       setError('');
       setSuccess('');
       const formData = buildCategoryFormData();
-      await productAPI.updateCategory(selectedCategory.id, formData);
+      await serviceHubAPI.updateCategory(selectedCategory.id, formData);
       setSuccess('Service category updated successfully.');
       setIsEditOpen(false);
       await fetchCategories();
