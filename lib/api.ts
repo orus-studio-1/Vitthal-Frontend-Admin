@@ -494,6 +494,20 @@ export const serviceAPI = {
     api.get<ApiResponse<any>>('/api/services/admin/quotations', { params }),
 };
 
+// Uploads go to the Admin Backend (admin-only); returns the S3 key and a 1-hour signed URL.
+export const uploadAPI = {
+  upload: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post<{ success: boolean; fileName: string }>('/api/uploads', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    const fileName = res.data.fileName;
+    const urlRes = await api.get<{ success: boolean; url: string }>('/api/uploads/file', { params: { fileName } });
+    return { fileName, url: urlRes.data.url };
+  },
+};
+
 export const hiringAPI = {
   getStats: () =>
     api.get<{ success: boolean; data: HiringStats }>('/api/hiring/stats'),

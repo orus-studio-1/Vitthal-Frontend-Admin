@@ -23,11 +23,8 @@ import {
   ImageIcon,
 } from 'lucide-react';
 import DashboardLayout from '../../../../components/dashboard-layout';
-import { extractApiError, hiringAPI } from '../../../../lib/api';
+import { extractApiError, hiringAPI, uploadAPI } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth-context';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_CLIENT_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000';
 
 const SUGGESTED_SKILLS = [
   'CNC Machine Operation',
@@ -125,21 +122,9 @@ export default function AddCandidatePage() {
     try {
       setPhotoUploading(true);
       setError('');
-      const formData = new FormData();
-      formData.append('file', file);
+      const { fileName: fileKey, url: signedUrl } = await uploadAPI.upload(file);
 
-      const res = await axios.post(`${API_BASE_URL}/api/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        withCredentials: true,
-      });
-
-      const fileKey = res.data.fileName;
-      // Fetch signed or direct url
-      const urlRes = await axios.get(`${API_BASE_URL}/api/upload/file?fileName=${encodeURIComponent(fileKey)}`, {
-        withCredentials: true,
-      });
-
-      setPhotoUrl(urlRes.data.url || fileKey);
+      setPhotoUrl(signedUrl || fileKey);
       setPhotoPreview(URL.createObjectURL(file));
     } catch (err) {
       console.error('Error uploading photo:', err);
@@ -158,18 +143,7 @@ export default function AddCandidatePage() {
     try {
       setDocUploading(true);
       setError('');
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const res = await axios.post(`${API_BASE_URL}/api/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        withCredentials: true,
-      });
-
-      const fileKey = res.data.fileName;
-      const urlRes = await axios.get(`${API_BASE_URL}/api/upload/file?fileName=${encodeURIComponent(fileKey)}`, {
-        withCredentials: true,
-      });
+      const { fileName: fileKey, url: signedUrl } = await uploadAPI.upload(file);
 
       setPendingDocs([
         ...pendingDocs,
@@ -177,7 +151,7 @@ export default function AddCandidatePage() {
           doc_type: docTypeInput,
           doc_number: docNumberInput,
           doc_name: file.name,
-          doc_url: urlRes.data.url || fileKey,
+          doc_url: signedUrl || fileKey,
         },
       ]);
       setDocNumberInput('');
