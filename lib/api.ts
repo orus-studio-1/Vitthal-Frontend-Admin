@@ -269,7 +269,11 @@ export const productAPI = {
 
   delete: (id: string) => api.delete<{ message: string }>(`/api/products/${id}`),
 
-  getProductTypes: () => api.get<ApiResponse<string[]>>('/api/products/getProductTypes'),
+  // Pass a category id to get only the product types used in that category.
+  getProductTypes: (categoryId?: string) =>
+    api.get<ApiResponse<string[]>>('/api/products/getProductTypes', {
+      params: categoryId ? { categoryId } : undefined,
+    }),
 };
 
 export const orderAPI = {
