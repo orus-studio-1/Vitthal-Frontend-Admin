@@ -74,6 +74,7 @@ export default function AddProductPage() {
   const [category, setCategory] = useState("");
   const [productType, setProductType] = useState("");
   const [productTypes, setProductTypes] = useState<string[]>([]);
+  const [isLoadingTypes, setIsLoadingTypes] = useState(false);
   const [showProductTypeInput, setShowProductTypeInput] = useState(false);
   const [newProductType, setNewProductType] = useState("");
   const [quotationLimit, setQuotationLimit] = useState("");
@@ -124,7 +125,8 @@ export default function AddProductPage() {
       try {
         const response = await productAPI.getCategories();
         if (response.data?.data) {
-          setCategoriesOptions(response.data.data);
+          // Catalog products belong to product categories only, never service categories.
+          setCategoriesOptions(response.data.data.filter((cat: any) => cat.category_type !== 'service'));
         }
       } catch (err) {
         console.error("Failed to load categories:", err);
@@ -132,19 +134,29 @@ export default function AddProductPage() {
         setIsLoadingCats(false);
       }
     }
-    async function loadTypes() {
-      try {
-        const response = await productAPI.getProductTypes();
-        if (response.data?.data) {
-          setProductTypes(response.data.data);
-        }
-      } catch (err) {
-        console.error("Failed to load product types:", err);
-      }
-    }
     loadCats();
-    loadTypes();
   }, []);
+
+  // Product types depend on the chosen category; reload them (and clear the old pick) on every change.
+  useEffect(() => {
+    setProductType("");
+    setProductTypes([]);
+    if (!category) return;
+
+    let active = true;
+    setIsLoadingTypes(true);
+    productAPI.getProductTypes(category)
+      .then((response) => {
+        if (active) setProductTypes(response.data?.data || []);
+      })
+      .catch((err) => console.error("Failed to load product types:", err))
+      .finally(() => {
+        if (active) setIsLoadingTypes(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [category]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -576,7 +588,9 @@ export default function AddProductPage() {
                   <button
                     type="button"
                     onClick={() => setShowProductTypeInput((value) => !value)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                    disabled={!category}
+                    title={category ? "Add product type" : "Select a category first"}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label="Add product type"
                   >
                     <Plus className="h-4 w-4" />
@@ -585,15 +599,24 @@ export default function AddProductPage() {
                 <select
                   value={productType}
                   onChange={(e) => setProductType(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition disabled:bg-slate-50 disabled:text-slate-400"
+                  disabled={!category || isLoadingTypes}
                   required
                 >
-                  <option value="">Select product type</option>
+                  <option value="">
+                    {!category
+                      ? "Select a category first"
+                      : isLoadingTypes
+                        ? "Loading product types..."
+                        : productTypes.length === 0
+                          ? "No product types yet - add one with +"
+                          : "Select product type"}
+                  </option>
                   {productTypes.map((type) => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
-                {showProductTypeInput ? (
+                {showProductTypeInput && category ? (
                   <div className="mt-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 p-3">
                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-blue-700">New product type</label>
                     <div className="mt-2 flex gap-2">
