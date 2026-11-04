@@ -104,6 +104,8 @@ export default function ProductsPage() {
   const [pendingListings, setPendingListings] = useState<PendingVendorListing[]>([]);
   const [pendingVariants, setPendingVariants] = useState<any[]>([]);
   const [pendingModifications, setPendingModifications] = useState<any[]>([]);
+  const [pendingDeletions, setPendingDeletions] = useState<any[]>([]);
+  const [pendingImages, setPendingImages] = useState<any[]>([]);
   const [categoriesOptions, setCategoriesOptions] = useState<any[]>([]);
   const [productTypes, setProductTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -193,17 +195,21 @@ export default function ProductsPage() {
       setError('');
       
       // Fetch products, pending listings, and pending variants in parallel
-      const [productsRes, listingsRes, variantsRes, modificationsRes] = await Promise.all([
+      const [productsRes, listingsRes, variantsRes, modificationsRes, deletionsRes, imagesRes] = await Promise.all([
         productAPI.getAll(),
         productAPI.getPendingVendorProducts(),
         productAPI.getPendingVariants(),
-        productAPI.getPendingModifications().catch(() => ({ data: { data: [] } }))
+        productAPI.getPendingModifications().catch(() => ({ data: { data: [] } })),
+        productAPI.getPendingDeletions().catch(() => ({ data: { data: [] } })),
+        productAPI.getPendingImages().catch(() => ({ data: { data: [] } }))
       ]);
       
       setProducts(productsRes.data.data);
       setPendingListings(listingsRes.data.data || []);
       setPendingVariants(variantsRes.data.data || []);
       setPendingModifications(modificationsRes.data?.data || []);
+      setPendingDeletions(deletionsRes.data?.data || []);
+      setPendingImages(imagesRes.data?.data || []);
     } catch (productsError) {
       setError(extractApiError(productsError, 'Failed to load products'));
     } finally {
@@ -449,6 +455,17 @@ export default function ProductsPage() {
       await fetchProducts();
     } catch (reviewError) {
       setError(extractApiError(reviewError, `Failed to ${decision} product modification`));
+    }
+  };
+
+  const handleReviewDeletion = async (id: string, decision: 'approved' | 'rejected') => {
+    if (decision === 'approved' && !confirm('Delete this vendor listing? This cannot be undone.')) return;
+    try {
+      setError('');
+      await productAPI.reviewPendingDeletion(id, decision);
+      await fetchProducts();
+    } catch (reviewError) {
+      setError(extractApiError(reviewError, 'Failed to review the deletion request'));
     }
   };
 
@@ -705,6 +722,7 @@ export default function ProductsPage() {
                   ['MOQ', changes.current_moq, changes.moq, Boolean(changes.is_moq_changed)],
                   ['Stock', changes.current_stock_quantity, changes.stock_quantity, Boolean(changes.is_stock_changed)],
                   ['GST', changes.current_gst_percentage, changes.gst_percentage, Boolean(changes.is_gst_changed)],
+                  ['Variant', JSON.stringify(changes.current_variant_properties || {}), JSON.stringify(changes.variant_properties || {}), Boolean(changes.has_variant_changes)],
                 ];
                 const changedAttributes = Object.keys(changes.attributes || {}).filter((key) => changes.attributes[key] !== changes.current_attributes?.[key]);
                 return (
@@ -742,6 +760,68 @@ export default function ProductsPage() {
               })}
             </div>
           ) : <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">No product edits are waiting for review.</p>}
+        </section>
+
+        <section className="rounded-[1.75rem] border border-amber-200 bg-white p-6">
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">New Product Media</h2>
+              <p className="text-sm text-slate-500">Images and videos vendors added to live products.</p>
+            </div>
+            <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-mono text-xs font-bold text-amber-700">{pendingImages.length} Awaiting Review</div>
+          </div>
+          {pendingImages.length ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {pendingImages.map((image) => (
+                <article key={image.id} className="overflow-hidden rounded-xl border border-slate-200">
+                  {image.media_type === 'video' ? (
+                    <video src={image.image_url} controls className="h-36 w-full bg-slate-900 object-cover" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={image.image_url} alt={image.product_name} className="h-36 w-full bg-slate-100 object-cover" />
+                  )}
+                  <div className="space-y-2 p-3">
+                    <p className="text-sm font-semibold text-slate-900">{image.product_name}</p>
+                    <p className="text-xs text-slate-500">{image.creator_name || image.creator_email || 'Vendor'}</p>
+                    <div className="flex gap-2">
+                      <button onClick={async () => { try { setError(''); await productAPI.reviewImage(image.id, 'rejected'); await fetchProducts(); } catch (err) { setError(extractApiError(err, 'Failed to reject the image')); } }} className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50">Reject</button>
+                      <button onClick={async () => { try { setError(''); await productAPI.reviewImage(image.id, 'approved'); await fetchProducts(); } catch (err) { setError(extractApiError(err, 'Failed to approve the image')); } }} className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Approve</button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">No new media.</p>}
+        </section>
+
+        <section className="rounded-[1.75rem] border border-red-200 bg-white p-6">
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Product Deletion Requests</h2>
+              <p className="text-sm text-slate-500">Listings stay live until you decide. A vendor-created product nobody else sells leaves the catalog.</p>
+            </div>
+            <div className="rounded-full border border-red-200 bg-red-50 px-3 py-1 font-mono text-xs font-bold text-red-700">{pendingDeletions.length} Awaiting Review</div>
+          </div>
+          {pendingDeletions.length ? (
+            <div className="space-y-3">
+              {pendingDeletions.map((request) => (
+                <article key={request.id} className="flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="font-bold text-slate-900">
+                      {request.product_name}
+                      {Object.keys(request.variant_properties || {}).length ? ` · ${Object.entries(request.variant_properties).map(([key, value]) => `${key}: ${value}`).join(', ')}` : ''}
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">Vendor: {request.vendor_company_name || request.vendor_user_name} ({request.vendor_email})</p>
+                    <p className="mt-2 text-sm text-slate-700"><span className="font-semibold">Reason:</span> {request.deletion_reason}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button onClick={() => void handleReviewDeletion(request.id, 'rejected')} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Keep Listing</button>
+                    <button onClick={() => void handleReviewDeletion(request.id, 'approved')} className="rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700">Approve Deletion</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">No deletion requests.</p>}
         </section>
 
         {/* ✨ QUEUE 3: PRODUCT VARIATION APPROVALS (HIGH PRIORITY) */}
@@ -1150,6 +1230,12 @@ export default function ProductsPage() {
                 </button>
               </div>
             </header>
+            {error ? (
+              <div role="alert" className="border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-700 flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            ) : null}
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">

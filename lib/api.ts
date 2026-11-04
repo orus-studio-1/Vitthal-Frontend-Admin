@@ -246,6 +246,15 @@ export const productAPI = {
   getPendingVariants: () =>
     api.get<ApiResponse<any[]>>('/api/products/pending-variants/all'),
 
+  getPendingImages: () =>
+    api.get<ApiResponse<any[]>>('/api/products/pending-images/all'),
+
+  getPendingDeletions: () =>
+    api.get<ApiResponse<any[]>>('/api/products/pending-deletions/all'),
+
+  reviewPendingDeletion: (id: string, decision: 'approved' | 'rejected') =>
+    api.put<ApiResponse<any>>(`/api/products/pending-deletions/${id}/review`, { decision }),
+
   reviewProductVariant: (variantId: string, decision: 'approved' | 'rejected', notes?: string) =>
     api.put<ApiResponse<any>>(`/api/products/pending-variants/${variantId}/review`, { decision, notes }),
 
@@ -485,6 +494,12 @@ export const serviceAPI = {
 
   reviewModification: (id: string, decision: 'approved' | 'rejected') =>
     api.put<ApiResponse<any>>(`/api/services/admin/pending-modifications/${id}/review`, { decision }),
+
+  getPendingMedia: () =>
+    api.get<ApiResponse<any[]>>('/api/services/admin/pending-media'),
+
+  reviewMedia: (serviceId: string, mediaId: string, decision: 'approved' | 'rejected') =>
+    api.put<ApiResponse<any>>(`/api/services/${serviceId}/media/${mediaId}/review`, { decision }),
 
   uploadMedia: (serviceId: string, formData: FormData) =>
     api.post<ApiResponse<any>>(`/api/services/${serviceId}/media`, formData, {

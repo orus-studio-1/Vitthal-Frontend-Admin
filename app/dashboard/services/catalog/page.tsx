@@ -23,7 +23,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import DashboardLayout from '../../../../components/dashboard-layout';
-import { extractApiError, serviceAPI, productAPI } from '../../../../lib/api';
+import { extractApiError, serviceAPI, productAPI, serviceHubAPI } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth-context';
 import { Service, Category } from '../../../../lib/types';
 
@@ -57,6 +57,7 @@ export default function ServicesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Edit fields
+  const [pendingMedia, setPendingMedia] = useState<any[]>([]);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editCategoryId, setEditCategoryId] = useState('');
@@ -64,12 +65,8 @@ export default function ServicesPage() {
   useEffect(() => {
     async function loadCategories() {
       try {
-        const response = await productAPI.getCategories();
-        if (response.data?.data) {
-          // Filter: only show service categories
-          const serviceCats = response.data.data.filter((c: any) => c.category_type === 'service');
-          setCategories(serviceCats);
-        }
+        const response = await serviceHubAPI.getCategories();
+        setCategories((response.data?.categories || []).filter((c: any) => c.is_active));
       } catch (err) {
         console.error('Failed to load service categories:', err);
       }
@@ -87,6 +84,8 @@ export default function ServicesPage() {
       }
       const pendingResponse = await serviceAPI.getPendingModifications();
       setPendingModifications(pendingResponse.data?.data || []);
+      const mediaResponse = await serviceAPI.getPendingMedia();
+      setPendingMedia(mediaResponse.data?.data || []);
     } catch (err) {
       setError(extractApiError(err, 'Failed to load services'));
     } finally {
@@ -117,6 +116,18 @@ export default function ServicesPage() {
       await fetchServices();
     } catch (err) {
       setError(extractApiError(err, 'Failed to delete service'));
+    }
+  };
+
+  const handleReviewMedia = async (item: any, decision: 'approved' | 'rejected') => {
+    try {
+      setError('');
+      await serviceAPI.reviewMedia(item.service_id, item.id, decision);
+      setSuccess('Media request ' + decision + '.');
+      const mediaResponse = await serviceAPI.getPendingMedia();
+      setPendingMedia(mediaResponse.data?.data || []);
+    } catch (err) {
+      setError(extractApiError(err, 'Failed to review the media request'));
     }
   };
 
@@ -304,6 +315,40 @@ export default function ServicesPage() {
           )}
         </section>
 
+        <section className="rounded-2xl border border-amber-200 bg-white p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Service Media Requests</h2>
+              <p className="text-sm text-slate-500">New files and removals for live services. Current media stays live until you decide.</p>
+            </div>
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{pendingMedia.length} waiting</span>
+          </div>
+          {pendingMedia.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">No media requests.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {pendingMedia.map((item) => (
+                <article key={item.id} className="overflow-hidden rounded-xl border border-slate-200">
+                  {item.media_type === 'video' ? (
+                    <video src={item.media_url} controls className="h-36 w-full bg-slate-900 object-cover" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.media_url} alt={item.service_name} className="h-36 w-full bg-slate-100 object-cover" />
+                  )}
+                  <div className="space-y-2 p-3">
+                    <p className="text-sm font-semibold text-slate-900">{item.service_name}</p>
+                    <p className="text-xs font-bold text-amber-700">{item.removal_requested_at ? 'Vendor wants to remove this' : 'New file to approve'}</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => void handleReviewMedia(item, 'rejected')} className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50">Reject</button>
+                      <button onClick={() => void handleReviewMedia(item, 'approved')} className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Approve</button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Alert Notifications */}
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
@@ -371,6 +416,9 @@ export default function ServicesPage() {
                         {service.category_label || 'Service'}
                         {service.subcategory_name ? ` > ${service.subcategory_name}` : ''}
                       </span>
+                      {(service as any).has_new_subcategory ? (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">New sub-category: approved with this service</span>
+                      ) : null}
                     </p>
                     <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
                       {service.description || 'No description provided.'}

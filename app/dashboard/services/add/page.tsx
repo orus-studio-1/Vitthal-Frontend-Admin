@@ -17,7 +17,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import DashboardLayout from '../../../../components/dashboard-layout';
-import { extractApiError, serviceAPI, productAPI } from '../../../../lib/api';
+import { extractApiError, serviceAPI, productAPI, serviceHubAPI } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth-context';
 import { Category } from '../../../../lib/types';
 
@@ -85,10 +85,9 @@ export default function AddServicePage() {
     async function loadCats() {
       setIsLoadingCats(true);
       try {
-        const response = await productAPI.getCategories();
-        if (response.data?.data) {
-          // Filter: only service categories
-          const serviceCats = response.data.data.filter((c: any) => c.category_type === 'service');
+        const response = await serviceHubAPI.getCategories();
+        if (response.data?.categories) {
+          const serviceCats = response.data.categories.filter((c: any) => c.is_active);
           setCategoriesOptions(serviceCats);
           if (serviceCats.length > 0) {
             setCategory(serviceCats[0].id);
