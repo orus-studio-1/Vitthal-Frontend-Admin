@@ -4,25 +4,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, Navigation, Search, Loader2, X } from 'lucide-react';
 
 const MAP_STYLES = {
-  sleekLight: {
-    name: 'Light',
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CartoDB'
-  },
-  sleekDark: {
-    name: 'Dark',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CartoDB'
+  standard: {
+    name: 'Standard',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
   },
   satellite: {
     name: 'Satellite',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: '&copy; Esri'
-  },
-  standard: {
-    name: 'Standard',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap'
   }
 };
 
@@ -43,7 +33,7 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
   const [searching, setSearching] = useState(false);
   const [geolocating, setGeolocating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [mapStyle, setMapStyle] = useState<keyof typeof MAP_STYLES>('sleekLight');
+  const [mapStyle, setMapStyle] = useState<keyof typeof MAP_STYLES>('standard');
 
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -109,7 +99,7 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
 
     const map = L.map(container, {
       zoomControl: true,
-      attributionControl: false
+      attributionControl: true
     }).setView([defaultLat, defaultLng], 13);
 
     // Add default tile layer
@@ -165,6 +155,46 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
       }
     };
   }, [leafletLoaded]);
+
+  // Swap the map images when another style is chosen
+  useEffect(() => {
+    const L = (window as any).L;
+    if (!leafletLoaded || !L || !mapRef.current) return;
+    if (tileLayerRef.current) {
+      mapRef.current.removeLayer(tileLayerRef.current);
+    }
+    const style = MAP_STYLES[mapStyle];
+    tileLayerRef.current = L.tileLayer(style.url, {
+      maxZoom: 19,
+      attribution: style.attribution
+    }).addTo(mapRef.current);
+  }, [leafletLoaded, mapStyle]);
+
+  // Suggest places while typing
+  useEffect(() => {
+    if (searchQuery.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            searchQuery
+          )}&limit=5&countrycodes=in`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setSuggestions(data || []);
+        }
+      } catch {
+        // Suggestions are optional; the Search button still reports errors.
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Update marker and map view when latitude/longitude props change externally
   useEffect(() => {
@@ -245,7 +275,7 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
           searchQuery
-        )}&limit=1`
+        )}&limit=1&countrycodes=in`
       );
       const results = await response.json();
 
@@ -259,7 +289,7 @@ export default function MapPicker({ latitude, longitude, onChange }: MapPickerPr
           mapRef.current.setView([lat, lng], 15);
         }
       } else {
-        setErrorMsg('Location not found. Please try a different search query.');
+        setErrorMsg('Location not found in India. Please type the full place name, for example Kolkata.');
       }
     } catch (err) {
       console.error('Error searching location:', err);

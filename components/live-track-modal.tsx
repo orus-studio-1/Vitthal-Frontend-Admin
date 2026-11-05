@@ -5,25 +5,15 @@ import { X, MapPin, Navigation, Bike, Loader2, Phone, Mail, Clock, ShieldCheck, 
 import { riderAPI } from '../lib/api';
 
 const MAP_STYLES = {
-  sleekLight: {
-    name: 'Light',
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CartoDB'
-  },
-  sleekDark: {
-    name: 'Dark',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CartoDB'
+  standard: {
+    name: 'Standard',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
   },
   satellite: {
     name: 'Satellite',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: '&copy; Esri'
-  },
-  standard: {
-    name: 'Standard',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap'
   }
 };
 
@@ -51,7 +41,7 @@ export default function LiveTrackModal({ riderId, onClose }: LiveTrackModalProps
   const [errorMsg, setErrorMsg] = useState('');
   const [riderData, setRiderData] = useState<any>(null);
   const [activeJob, setActiveJob] = useState<any>(null);
-  const [mapStyle, setMapStyle] = useState<keyof typeof MAP_STYLES>('sleekLight');
+  const [mapStyle, setMapStyle] = useState<keyof typeof MAP_STYLES>('standard');
 
   const mapRef = useRef<any>(null);
   const riderMarkerRef = useRef<any>(null);
@@ -169,7 +159,7 @@ export default function LiveTrackModal({ riderId, onClose }: LiveTrackModalProps
     if (!mapRef.current) {
       const map = L.map(mapContainerRef.current, {
         zoomControl: true,
-        attributionControl: false
+        attributionControl: true
       }).setView(riderPosition, 14);
 
       // Load initial tiles
