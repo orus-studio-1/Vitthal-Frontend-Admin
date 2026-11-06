@@ -515,7 +515,7 @@ export default function AdminPayoutsPage() {
             <section className="mb-8 rounded-[1.25rem] border border-indigo-200 bg-white p-5 shadow-sm">
                 <div className="mb-4">
                     <h2 className="text-lg font-bold text-slate-900">Payout commission settings</h2>
-                    <p className="text-sm text-slate-500">Set the platform commission deducted from new vendor and worker payouts. Existing requests keep their saved rates.</p>
+                    <p className="text-sm text-slate-500">Set the platform commission deducted from new vendor and worker payouts. Requests waiting for payment switch to the new rates; part-paid and paid requests keep theirs.</p>
                 </div>
                 <form onSubmit={savePayoutCommissionSettings} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                     <label className="block text-sm font-medium text-slate-700">Vendor commission (%)
