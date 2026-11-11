@@ -83,9 +83,9 @@ function getCatalogValue(product: Product, keys: string[]) {
   return '—';
 }
 
-function CatalogAttributeGrid({ product }: { product: Product }) {
+function CatalogAttributeGrid({ product, wide = false }: { product: Product; wide?: boolean }) {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-3">
+    <div className={`grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-3 ${wide ? 'lg:grid-cols-4' : ''}`}>
       {CATALOG_FIELDS.map(({ label, keys }) => (
         <div key={label} className="min-w-0">
           <p className="text-[10px] text-slate-500">{label}</p>
@@ -1094,8 +1094,8 @@ export default function ProductsPage() {
                         key={product.id}
                         className="rounded-2xl border border-slate-200 bg-white p-5 hover:border-slate-300 transition"
                       >
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="cursor-pointer" onClick={() => handleOpenDrawer(product)}>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 flex-1 cursor-pointer" onClick={() => handleOpenDrawer(product)}>
                             <h3 className="font-bold text-slate-900 hover:text-blue-700 flex items-center gap-2">
                               {product.name}
                               <Eye className="h-4 w-4 text-slate-400" />
@@ -1103,9 +1103,9 @@ export default function ProductsPage() {
                             <p className="text-xs text-slate-500 mt-0.5">
                               {categoriesOptions.find(c => c.id === product.category)?.label || product.category || 'Unclassified'} • {product.product_type} • {product.vendor_count || 0} sellers
                             </p>
-                            <div className="mt-3"><CatalogAttributeGrid product={product} /></div>
+                            <div className="mt-3"><CatalogAttributeGrid product={product} wide /></div>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex shrink-0 gap-2">
                             <button
                               onClick={() => handleOpenDrawer(product)}
                               className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
@@ -1142,28 +1142,29 @@ export default function ProductsPage() {
                         key={product.id}
                         className="rounded-2xl border border-slate-200 bg-white p-5 hover:border-slate-300 transition"
                       >
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="cursor-pointer" onClick={() => handleOpenDrawer(product)}>
-                            <h3 className="font-bold text-slate-900 hover:text-blue-700 flex items-center gap-2">
-                              {product.name}
-                              <Eye className="h-4 w-4 text-slate-400" />
-                            </h3>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 flex-1 cursor-pointer" onClick={() => handleOpenDrawer(product)}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-bold text-slate-900 hover:text-blue-700 flex items-center gap-2">
+                                {product.name}
+                                <Eye className="h-4 w-4 text-slate-400" />
+                              </h3>
+                              <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase border ${
+                                product.approval_status === 'approved'
+                                  ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                                  : product.approval_status === 'rejected'
+                                  ? 'bg-red-50 border-red-100 text-red-700'
+                                  : 'bg-amber-50 border-amber-100 text-amber-700'
+                              }`}>
+                                {product.approval_status}
+                              </span>
+                            </div>
                             <p className="text-xs text-slate-500 mt-0.5">
                               Submitted by: <span className="font-semibold text-slate-700">{product.creator_vendor_name || product.creator_name || 'Vendor'}</span> • {categoriesOptions.find(c => c.id === product.category)?.label || product.category || 'Unclassified'} • {product.product_type}
                             </p>
-                        <span className={`inline-block rounded-full px-2.5 py-0.5 mt-2 text-[10px] font-bold uppercase border ${
-                              product.approval_status === 'approved'
-                                ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                                : product.approval_status === 'rejected'
-                                ? 'bg-red-50 border-red-100 text-red-700'
-                                : 'bg-amber-50 border-amber-100 text-amber-700'
-                            }`}>
-                          {product.approval_status}
-                        </span>
-                        <div className="mt-3"><CatalogAttributeGrid product={product} /></div>
-                            <div className="mt-3"><CatalogAttributeGrid product={product} /></div>
+                            <div className="mt-3"><CatalogAttributeGrid product={product} wide /></div>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex shrink-0 gap-2">
                             <button
                               onClick={() => handleOpenDrawer(product)}
                               className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
