@@ -29,7 +29,9 @@ import {
   ServiceTicketQuotation,
   ServiceTicketDocument,
   ServiceHubStats,
-  ContactQuery
+  ContactQuery,
+  VendorCategoryRequest,
+  VendorCategoryRequestStatus,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9001';
@@ -37,6 +39,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9001';
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
+  // Without a timeout a stalled backend/DB leaves pages spinning forever. 30s still covers a
+  // cold start of the remote database (~5s per connection pool).
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -91,6 +96,16 @@ export const authAPI = {
   me: () =>
     api.get('/api/auth/me'),
 };
+
+export interface BulkImportResult {
+  dryRun?: boolean;
+  imported: number;
+  failed: number;
+  skipped: number;
+  errors: Array<{ row: number; name: string; reason: string }>;
+  skippedRows: Array<{ row: number; name: string; reason: string; existingName?: string; existingItemCode?: string | null }>;
+  createdCategories?: string[];
+}
 
 export const productAPI = {
   create: (data: {
@@ -283,6 +298,22 @@ export const productAPI = {
     api.get<ApiResponse<string[]>>('/api/products/getProductTypes', {
       params: categoryId ? { categoryId } : undefined,
     }),
+
+  bulkImport: (products: Array<{
+    name: string;
+    itemCode?: string | null;
+    category: string;
+    productType: string;
+    description?: string;
+    attributes?: Record<string, string>;
+    quotationLimit?: number | null;
+    sourceRow?: number;
+  }>, options: { fileHash?: string | null; fileName?: string; dryRun?: boolean } = {}) =>
+    api.post<{ message: string; data: BulkImportResult }>(
+      '/api/products/bulkImport',
+      { products, ...options },
+      { timeout: 120000 }
+    ),
 };
 
 export const orderAPI = {
@@ -329,6 +360,18 @@ export const vendorAPI = {
 
 export const adminAPI = {
   getDashboard: () => api.get<ApiResponse<DashboardStats>>('/api/admin/dashboard'),
+
+  getVendorCategoryRequests: (status: VendorCategoryRequestStatus | 'all' = 'pending') =>
+    api.get<ApiResponse<{ requests: VendorCategoryRequest[]; counts: Record<VendorCategoryRequestStatus, number> }>>(
+      '/api/admin/vendor-category-requests',
+      { params: { status } }
+    ),
+
+  reviewVendorCategoryRequest: (id: string, decisions: Record<string, 'approved' | 'rejected'>, note?: string) =>
+    api.put<ApiResponse<{ id: string; status: VendorCategoryRequestStatus }>>(
+      `/api/admin/vendor-category-requests/${id}/review`,
+      { decisions, note }
+    ),
 
   getAnalytics: (period?: string, range?: { startDate?: string; endDate?: string }) =>
     api.get<ApiResponse<AnalyticsData>>('/api/admin/analytics', { params: { period, ...range } }),

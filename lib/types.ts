@@ -796,4 +796,32 @@ export interface ContactQuery {
   updated_at: string;
 }
 
+export type VendorCategoryRequestStatus = 'pending' | 'approved' | 'partially_approved' | 'rejected';
 
+export interface VendorCategoryRequestItem {
+  category_id: string;
+  code: string;
+  label: string;
+  status: 'pending' | 'approved' | 'rejected';
+  is_active: boolean;
+  max_commission: number;
+  vendor_count: number;
+  product_count: number;
+}
+
+export interface VendorCategoryRequest {
+  id: string;
+  reason: string;
+  status: VendorCategoryRequestStatus;
+  admin_note: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by_name: string | null;
+  vendor_id: string;
+  company_name: string | null;
+  vendor_approval_status: string | null;
+  vendor_name: string | null;
+  vendor_email: string | null;
+  items: VendorCategoryRequestItem[];
+  current_categories: Array<{ id: string; label: string }>;
+}

@@ -24,6 +24,7 @@ import {
   Wrench,
   ShieldCheck,
   Briefcase,
+  FolderPlus,
 } from 'lucide-react';
 
 const navigation = [
@@ -37,6 +38,7 @@ const navigation = [
   { name: 'Client Assets', href: '/dashboard/service-hub/assets', icon: Package },
   { name: 'Employee Hiring', href: '/dashboard/hiring', icon: Briefcase },
   { name: 'Vendors', href: '/dashboard/vendors', icon: Building2 },
+  { name: 'Category Requests', href: '/dashboard/vendors/category-requests', icon: FolderPlus },
   { name: 'Fulfillment Centers', href: '/dashboard/fulfillment-centers', icon: MapPin },
   { name: 'Rider Partners', href: '/dashboard/riders', icon: Bike },
   { name: 'KYC Approvals', href: '/dashboard/kyc-approvals', icon: ShieldCheck },

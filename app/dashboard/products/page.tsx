@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   SlidersHorizontal,
@@ -23,12 +23,25 @@ import {
   BellRing,
   ArrowUpRight,
   Plus,
-  Upload
+  Upload,
+  FileSpreadsheet,
+  CheckCircle,
+  TriangleAlert,
+  Download,
+  Ban,
 } from 'lucide-react';
 import DashboardLayout from '../../../components/dashboard-layout';
-import { extractApiError, productAPI } from '../../../lib/api';
+import { extractApiError, productAPI, type BulkImportResult } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import { Product } from '../../../lib/types';
+import {
+  IMPORT_COLUMNS,
+  MAX_IMPORT_FILE_BYTES,
+  MAX_IMPORT_ROWS,
+  parseImportSheet,
+  type ImportRow,
+  type RowIssue,
+} from '../../../lib/product-import';
 import { NotionEditor } from '../../../components/notion-editor/NotionEditor';
 import { RichDescriptionRenderer } from '../../../components/notion-editor/RichDescriptionRenderer';
 
@@ -96,9 +109,736 @@ function CatalogAttributeGrid({ product, wide = false }: { product: Product; wid
   );
 }
 
+// ─── Excel import ────────────────────────────────────────────────────────────
+type ImportResult = BulkImportResult;
+
+/** SHA-256 of the file bytes, used by the server to refuse a file that was already imported. */
+async function fingerprintFile(buffer: ArrayBuffer): Promise<string | null> {
+  try {
+    if (typeof crypto === 'undefined' || !crypto.subtle) return null;
+    const digest = await crypto.subtle.digest('SHA-256', buffer);
+    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
+}
+
+function toImportPayload(rows: ImportRow[]) {
+  return rows.map((r) => ({
+    sourceRow: r.sourceRow,
+    name: r.name,
+    itemCode: r.itemCode || null,
+    category: r.category,
+    productType: r.productType,
+    description: r.description,
+    quotationLimit: r.quotationLimit,
+    attributes: r.attributes,
+  }));
+}
+
+interface ImportProblem {
+  title: string;
+  message: string;
+  details?: string[];
+}
+
+const IMPORT_TEMPLATE_NAME = 'global-catalogue-import-template.xlsx';
+
+async function downloadImportTemplate() {
+  const XLSX = await import('xlsx');
+  const wb = XLSX.utils.book_new();
+
+  const headers = IMPORT_COLUMNS.map((c) => (c.required ? `${c.header} *` : c.header));
+  const products = XLSX.utils.aoa_to_sheet([headers]);
+  products['!cols'] = IMPORT_COLUMNS.map((c) => ({ wch: Math.max(14, c.header.length + 4) }));
+  XLSX.utils.book_append_sheet(wb, products, 'Products');
+
+  const guide = XLSX.utils.aoa_to_sheet([
+    ['Global Catalogue import guide'],
+    ['Fill in the "Products" sheet: one product per row, headings in row 1. Columns marked * are required.'],
+    ['Only the columns below are accepted. A file with any other column (e.g. Price, Stock, Salary) is refused.'],
+    [],
+    ['Column', 'Required', 'What to enter', 'Example'],
+    ...IMPORT_COLUMNS.map((c) => [c.header, c.required ? 'Yes' : 'No', c.help, c.example]),
+  ]);
+  guide['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 70 }, { wch: 32 }];
+  XLSX.utils.book_append_sheet(wb, guide, 'Instructions');
+
+  XLSX.writeFile(wb, IMPORT_TEMPLATE_NAME);
+}
+
+function ImportProblemBox({ problem }: { problem: ImportProblem }) {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+      <div className="flex items-start gap-3">
+        <div className="h-9 w-9 shrink-0 rounded-xl bg-white border border-red-100 flex items-center justify-center">
+          <Ban className="h-4 w-4 text-red-600" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-red-800">{problem.title}</p>
+          <p className="text-xs text-red-700 mt-0.5">{problem.message}</p>
+          {problem.details && problem.details.length > 0 && (
+            <ul className="mt-2.5 space-y-1.5">
+              {problem.details.map((line) => (
+                <li key={line} className="flex items-start gap-2 text-xs text-red-800">
+                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-red-400" />
+                  <span className="min-w-0 break-words">{line}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BulkImportModal ────────────────────────────────────────────────────────
+function BulkImportModal({
+  onClose,
+  onSuccess,
+  knownCategories,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+  knownCategories: Array<{ code?: string; label?: string }>;
+}) {
+  const [step, setStep] = useState<'pick' | 'preview' | 'importing' | 'done'>('pick');
+  const [rows, setRows] = useState<ImportRow[]>([]);
+  const [invalidRows, setInvalidRows] = useState<RowIssue[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [usedColumns, setUsedColumns] = useState<string[]>([]);
+  const [fileName, setFileName] = useState('');
+  const [sheetName, setSheetName] = useState('');
+  const [previewTab, setPreviewTab] = useState<'ready' | 'existing' | 'issues'>('ready');
+  const [fileHash, setFileHash] = useState<string | null>(null);
+  // Server dry run: exactly what the import would do, including duplicates already in the catalogue.
+  const [serverCheck, setServerCheck] = useState<ImportResult | null>(null);
+  const [serverCheckFailed, setServerCheckFailed] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [problem, setProblem] = useState<ImportProblem | null>(null);
+  const [importError, setImportError] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [checking, setChecking] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const knownCategoryKeys = new Set(
+    knownCategories.flatMap((c) => [c.code, c.label]).filter(Boolean).map((v) => String(v).trim().toLowerCase())
+  );
+
+  const parseExcel = useCallback(async (file: File) => {
+    setProblem(null);
+    setImportError('');
+
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (extension !== 'xlsx' && extension !== 'xls') {
+      setProblem({
+        title: 'Unsupported file type',
+        message: `"${file.name}" is not an Excel workbook. Upload a .xlsx or .xls file based on the import template.`,
+      });
+      return;
+    }
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      setProblem({
+        title: 'File is too large',
+        message: `The file is ${(file.size / 1024 / 1024).toFixed(1)} MB. Upload at most 5 MB, or split it into smaller files.`,
+      });
+      return;
+    }
+
+    setChecking(true);
+    try {
+      // Loaded on demand to keep the page bundle small.
+      const XLSX = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      let wb;
+      try {
+        wb = XLSX.read(buffer, { type: 'array' });
+      } catch {
+        setProblem({
+          title: 'The file could not be read',
+          message: 'It may be damaged or password-protected. Open it in Excel, save it again as .xlsx and retry.',
+        });
+        return;
+      }
+
+      // The template keeps products on a "Products" sheet; otherwise the first sheet is used.
+      const chosen = wb.SheetNames.find((n) => n.trim().toLowerCase() === 'products') ?? wb.SheetNames[0];
+      if (!chosen) {
+        setProblem({ title: 'The workbook has no sheets', message: 'Download the template and fill in your products.' });
+        return;
+      }
+      const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[chosen], { header: 1, defval: '', raw: false, blankrows: true });
+      const parsed = parseImportSheet(raw, chosen);
+
+      if (!parsed.ok) {
+        setProblem({ title: parsed.title, message: parsed.message, details: parsed.details });
+        return;
+      }
+
+      // Check against the catalogue before showing the preview (nothing is saved).
+      const hash = await fingerprintFile(buffer);
+      let check: ImportResult | null = null;
+      let checkFailed = false;
+      if (parsed.rows.length > 0) {
+        try {
+          const res = await productAPI.bulkImport(toImportPayload(parsed.rows), { fileHash: hash, fileName: file.name, dryRun: true });
+          check = res.data.data;
+        } catch (err) {
+          const data = (err as { response?: { status?: number; data?: { message?: string; data?: { duplicateFile?: boolean } } } }).response;
+          if (data?.status === 409 && data.data?.data?.duplicateFile) {
+            setProblem({
+              title: 'This file has already been imported',
+              message: data.data.message || 'This exact file was imported before. Importing it again would create duplicates.',
+              details: ['To add more products, put only the new rows in a file and upload that.'],
+            });
+            return;
+          }
+          checkFailed = true;
+        }
+      }
+
+      setFileHash(hash);
+      setServerCheck(check);
+      setServerCheckFailed(checkFailed);
+      setRows(parsed.rows);
+      setInvalidRows(parsed.invalid);
+      setWarnings(parsed.warnings);
+      setUsedColumns(parsed.columns.map((c) => c.header));
+      setFileName(file.name);
+      setSheetName(chosen);
+      setPreviewTab(parsed.rows.length === 0 ? 'issues' : check && check.imported === 0 && check.skipped > 0 ? 'existing' : 'ready');
+      setStep('preview');
+    } catch (err) {
+      console.error(err);
+      setProblem({ title: 'The file could not be checked', message: 'Something went wrong while reading the file. Please try again.' });
+    } finally {
+      setChecking(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) void parseExcel(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) void parseExcel(file);
+  };
+
+  const resetToPick = () => {
+    setStep('pick');
+    setRows([]);
+    setInvalidRows([]);
+    setWarnings([]);
+    setFileName('');
+    setImportError('');
+    setServerCheck(null);
+    setServerCheckFailed(false);
+    setFileHash(null);
+  };
+
+  const handleImport = async () => {
+    setStep('importing');
+    setProgress(-1); // indeterminate while waiting for the server
+    setImportError('');
+    try {
+      const res = await productAPI.bulkImport(toImportPayload(rows), { fileHash, fileName });
+      setProgress(100);
+      setResult(res.data.data);
+      setStep('done');
+    } catch (err) {
+      setImportError(extractApiError(err, 'Import failed. Please check your data and try again.'));
+      setStep('preview');
+    }
+  };
+
+  const categoryBreakdown = rows.reduce<Record<string, number>>((acc, r) => {
+    acc[r.category] = (acc[r.category] || 0) + 1;
+    return acc;
+  }, {});
+  const newCategories = serverCheck?.createdCategories
+    ?? Object.keys(categoryBreakdown).filter((c) => !knownCategoryKeys.has(c.trim().toLowerCase()));
+  const skippedRowNumbers = new Set((serverCheck?.skippedRows ?? []).map((s) => s.row));
+  const serverErrorRows = (serverCheck?.errors ?? []).filter((e) => !invalidRows.some((i) => i.row === e.row));
+  const serverErrorNumbers = new Set(serverErrorRows.map((e) => e.row));
+  const readyRows = rows.filter((r) => !skippedRowNumbers.has(r.sourceRow) && !serverErrorNumbers.has(r.sourceRow));
+  const problemRows: RowIssue[] = [
+    ...invalidRows,
+    ...serverErrorRows.map((e) => ({ row: e.row, name: e.name, problems: [e.reason] })),
+  ].sort((a, b) => a.row - b.row);
+  const existingRows = serverCheck?.skippedRows ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+              <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Import from Excel</h2>
+              <p className="text-xs text-slate-500">
+                {step === 'pick' && 'Upload a product catalogue file based on the import template'}
+                {step === 'preview' && `${fileName} · sheet "${sheetName}"`}
+                {step === 'importing' && 'Importing products to the Global Catalogue...'}
+                {step === 'done' && 'Import complete'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 p-6">
+
+          {/* STEP 1: File picker */}
+          {step === 'pick' && (
+            <div className="space-y-4">
+              {problem && <ImportProblemBox problem={problem} />}
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                onClick={() => !checking && fileInputRef.current?.click()}
+                className={`group flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-10 transition-all duration-200 ${
+                  checking ? 'cursor-wait opacity-70' : 'cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/40'
+                }`}
+              >
+                <div className="h-16 w-16 rounded-2xl bg-white border border-slate-200 group-hover:border-emerald-200 shadow-sm flex items-center justify-center transition">
+                  {checking ? (
+                    <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="h-8 w-8 text-slate-400 group-hover:text-emerald-500 transition" />
+                  )}
+                </div>
+                <div className="text-center">
+                  <p className="font-semibold text-slate-700">{checking ? 'Checking the file...' : 'Drop your Excel file here'}</p>
+                  <p className="text-xs text-slate-400 mt-1">or click to browse · .xlsx or .xls · up to {MAX_IMPORT_ROWS.toLocaleString()} products, 5 MB</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Accepted columns</p>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Only these fields from Add Product can be imported. Files with any other column are refused.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void downloadImportTemplate()}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 transition"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download template
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {IMPORT_COLUMNS.map((c) => (
+                    <span
+                      key={c.field}
+                      className={`text-[11px] font-semibold rounded-full px-2.5 py-1 border ${
+                        c.required ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      {c.header}{c.required ? ' *' : ''}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-slate-400">* required. Prices, stock and GST are set by vendors, not in the catalogue.</p>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+          )}
+
+          {/* STEP 2: Preview */}
+          {step === 'preview' && (
+            <div className="space-y-5">
+              {importError && (
+                <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4 shrink-0" /> {importError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
+                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                <span>
+                  File format verified. Columns used: <strong>{usedColumns.join(', ')}</strong>
+                </span>
+              </div>
+
+              {serverCheckFailed && (
+                <p className="flex items-center gap-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  Couldn&apos;t check this file against the catalogue right now. Products that already exist will still be skipped during the import.
+                </p>
+              )}
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-center">
+                  <p className="text-2xl font-black text-emerald-700">{readyRows.length}</p>
+                  <p className="text-xs text-emerald-600 font-semibold mt-0.5">New Products</p>
+                </div>
+                <div className={`rounded-2xl p-4 text-center border ${existingRows.length ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
+                  <p className={`text-2xl font-black ${existingRows.length ? 'text-amber-700' : 'text-slate-400'}`}>{existingRows.length}</p>
+                  <p className={`text-xs font-semibold mt-0.5 ${existingRows.length ? 'text-amber-700' : 'text-slate-500'}`}>Already in Catalogue</p>
+                </div>
+                <div className={`rounded-2xl p-4 text-center border ${problemRows.length ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                  <p className={`text-2xl font-black ${problemRows.length ? 'text-red-700' : 'text-slate-400'}`}>{problemRows.length}</p>
+                  <p className={`text-xs font-semibold mt-0.5 ${problemRows.length ? 'text-red-600' : 'text-slate-500'}`}>Rows with Problems</p>
+                </div>
+                <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4 text-center">
+                  <p className="text-2xl font-black text-blue-700">{Object.keys(categoryBreakdown).length}</p>
+                  <p className="text-xs text-blue-600 font-semibold mt-0.5">Categories</p>
+                </div>
+              </div>
+
+              {/* Category breakdown */}
+              {rows.length > 0 && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Category Breakdown</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(categoryBreakdown).map(([cat, count]) => {
+                      const isNew = newCategories.includes(cat);
+                      return (
+                        <span
+                          key={cat}
+                          className={`text-xs font-semibold border rounded-full px-3 py-1 ${
+                            isNew ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-white border-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {cat} <span className={isNew ? 'text-amber-500' : 'text-slate-400'}>({count})</span>
+                          {isNew && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide">New</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {newCategories.length > 0 && (
+                    <p className="mt-3 text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                      {newCategories.length} categor{newCategories.length > 1 ? 'ies' : 'y'} will be <strong>created</strong> with 0% commission.
+                      No vendor has {newCategories.length > 1 ? 'them' : 'it'} yet, so vendors must request access before listing these products.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {warnings.map((w) => (
+                <p key={w} className="flex items-center gap-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-slate-400" /> {w}
+                </p>
+              ))}
+
+              {/* Tabs */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPreviewTab('ready')}
+                  className={`rounded-xl px-4 py-2 text-xs font-bold border transition ${
+                    previewTab === 'ready' ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  New ({readyRows.length})
+                </button>
+                <button
+                  onClick={() => setPreviewTab('existing')}
+                  disabled={existingRows.length === 0}
+                  className={`rounded-xl px-4 py-2 text-xs font-bold border transition disabled:opacity-40 ${
+                    previewTab === 'existing' ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Already in Catalogue ({existingRows.length})
+                </button>
+                <button
+                  onClick={() => setPreviewTab('issues')}
+                  disabled={problemRows.length === 0}
+                  className={`rounded-xl px-4 py-2 text-xs font-bold border transition disabled:opacity-40 ${
+                    previewTab === 'issues' ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Problems ({problemRows.length})
+                </button>
+              </div>
+
+              {previewTab === 'ready' ? (
+                readyRows.length === 0 ? (
+                  <p className="text-sm text-slate-500 italic">
+                    {existingRows.length > 0 && problemRows.length === 0
+                      ? 'Every product in this file is already in the catalogue. There is nothing new to import.'
+                      : 'No new products to import. Fix the problems in the file and upload it again.'}
+                  </p>
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto max-h-80">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0">
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="text-left px-4 py-3 font-semibold text-slate-500 whitespace-nowrap">Row</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-500 whitespace-nowrap">Item Code</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-500 whitespace-nowrap">Product Name</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-500 whitespace-nowrap">Category</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-500 whitespace-nowrap">Type</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-500 whitespace-nowrap">Brand</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-500 whitespace-nowrap">Quote Limit</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {readyRows.map((row) => (
+                            <tr key={row.sourceRow} className="hover:bg-slate-50 transition">
+                              <td className="px-4 py-2.5 text-slate-400 font-mono">{row.sourceRow}</td>
+                              <td className="px-4 py-2.5 font-mono text-slate-600">{row.itemCode || '—'}</td>
+                              <td className="px-4 py-2.5 font-semibold text-slate-900 max-w-[200px] truncate">{row.name}</td>
+                              <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{row.category}</td>
+                              <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{row.productType}</td>
+                              <td className="px-4 py-2.5 text-slate-500">{row.attributes.Brand || '—'}</td>
+                              <td className="px-4 py-2.5 text-slate-500">{row.quotationLimit ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              ) : previewTab === 'existing' ? (
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-3 space-y-2 max-h-80 overflow-y-auto">
+                  {existingRows.map((item) => (
+                    <div key={item.row} className="flex items-start gap-3 text-xs rounded-xl bg-white border border-amber-100 px-3 py-2.5">
+                      <span className="font-mono font-bold text-amber-600 shrink-0">Row {item.row}</span>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800 truncate">{item.name}</p>
+                        <p className="text-amber-800 mt-0.5">{item.reason}</p>
+                        {item.existingName && (
+                          <p className="text-slate-500 mt-0.5">
+                            Existing product: <span className="font-semibold text-slate-700">{item.existingName}</span>
+                            {item.existingItemCode ? <span className="font-mono"> · {item.existingItemCode}</span> : null}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-red-100 bg-red-50/60 p-3 space-y-2 max-h-80 overflow-y-auto">
+                  {problemRows.map((issue) => (
+                    <div key={issue.row} className="flex items-start gap-3 text-xs rounded-xl bg-white border border-red-100 px-3 py-2.5">
+                      <span className="font-mono font-bold text-red-500 shrink-0">Row {issue.row}</span>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800 truncate">{issue.name}</p>
+                        <p className="text-red-600 mt-0.5">{issue.problems.join(' · ')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(problemRows.length > 0 || existingRows.length > 0) && readyRows.length > 0 && (
+                <p className="text-[11px] text-slate-500">
+                  Only the {readyRows.length} new product{readyRows.length > 1 ? 's are' : ' is'} imported. Products already in the catalogue are never added twice;
+                  rows with problems are skipped and can be fixed and imported later.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* STEP 3: Importing (progress) */}
+          {step === 'importing' && (
+            <div className="flex flex-col items-center justify-center py-16 gap-6">
+              <div className="relative h-20 w-20">
+                <svg className="animate-spin h-20 w-20 text-emerald-100" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                </svg>
+                <svg className="absolute inset-0 animate-spin h-20 w-20 text-emerald-500" viewBox="0 0 24 24" fill="none" style={{ animationDuration: '0.8s' }}>
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                <FileSpreadsheet className="absolute inset-0 m-auto h-8 w-8 text-emerald-600" />
+              </div>
+              <div className="text-center">
+                <p className="font-bold text-slate-800 text-lg">Importing {readyRows.length} products...</p>
+                <p className="text-sm text-slate-500 mt-1">Sending to server — this takes a moment over remote DB</p>
+              </div>
+              <div className="w-full max-w-sm">
+                <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                  {progress === 100 ? (
+                    // Fully complete
+                    <div className="h-full w-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full" />
+                  ) : (
+                    // Indeterminate shimmer — moves continuously while waiting
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500"
+                      style={{
+                        width: '45%',
+                        animation: 'indeterminate-bar 1.4s ease-in-out infinite',
+                        backgroundSize: '200% 100%',
+                      }}
+                    />
+                  )}
+                </div>
+                <p className="text-xs text-center text-slate-400 mt-2">
+                  {progress === 100 ? 'Done!' : 'Processing...'}
+                </p>
+              </div>
+              {/* Inject keyframes for the indeterminate animation */}
+              <style>{`
+                @keyframes indeterminate-bar {
+                  0%   { transform: translateX(-100%); width: 45%; }
+                  50%  { width: 60%; }
+                  100% { transform: translateX(260%); width: 45%; }
+                }
+              `}</style>
+            </div>
+          )}
+
+          {/* STEP 4: Result */}
+          {step === 'done' && result && (
+            <div className="space-y-5">
+              {/* Result summary */}
+              <div className={`rounded-2xl p-5 border ${
+                result.failed === 0
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : 'bg-amber-50 border-amber-200'
+              }`}>
+                <div className="flex items-center gap-3 mb-3">
+                  {result.failed === 0 ? (
+                    <CheckCircle className="h-7 w-7 text-emerald-500" />
+                  ) : (
+                    <TriangleAlert className="h-7 w-7 text-amber-500" />
+                  )}
+                  <div>
+                    <p className={`font-bold text-lg ${
+                      result.failed === 0 ? 'text-emerald-700' : 'text-amber-700'
+                    }`}>
+                      {result.failed > 0
+                        ? 'Import partially complete'
+                        : result.skipped > 0
+                          ? 'New products imported'
+                          : 'All products imported!'}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      <span className="font-bold text-emerald-700">{result.imported}</span> imported successfully
+                      {result.skipped > 0 && (
+                        <>, <span className="font-bold text-amber-700">{result.skipped}</span> already in the catalogue</>
+                      )}
+                      {result.failed > 0 && (
+                        <>, <span className="font-bold text-red-600">{result.failed}</span> failed</>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {(result.createdCategories?.length || result.skipped > 0) ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2 text-xs text-slate-700">
+                  {result.createdCategories && result.createdCategories.length > 0 && (
+                    <p><span className="font-bold">New categories created:</span> {result.createdCategories.join(', ')}</p>
+                  )}
+                  {result.skipped > 0 && (
+                    <div>
+                      <p className="font-bold mb-1">Not added because they are already in the catalogue ({result.skipped}):</p>
+                      <div className="max-h-32 overflow-y-auto space-y-0.5">
+                        {result.skippedRows.map((s) => (
+                          <p key={s.row}><span className="font-mono text-slate-500">Row {s.row}</span> · {s.name} · <span className="text-slate-500">{s.reason}</span></p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                Imported products are live in the Global Catalogue and vendors can list them right away.
+                They show on the client portal once an approved vendor has listed them, same as products added by hand.
+              </p>
+
+              {/* Error list */}
+              {result.errors.length > 0 && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+                  <p className="text-xs font-bold text-red-700 uppercase tracking-wider mb-3">Failed Rows</p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {result.errors.map((err) => (
+                      <div key={err.row} className="flex items-start gap-2 text-xs rounded-xl bg-white border border-red-100 px-3 py-2">
+                        <span className="font-mono text-red-500 shrink-0">Row {err.row}</span>
+                        <span className="font-semibold text-slate-700 shrink-0">{err.name}</span>
+                        <span className="text-red-600 min-w-0">{err.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-3 p-6 border-t border-slate-100 bg-slate-50/50">
+          {step === 'preview' ? (
+            <button
+              onClick={resetToPick}
+              className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition"
+            >
+              ← Pick different file
+            </button>
+          ) : (
+            <div />
+          )}
+
+          <div className="flex items-center gap-3">
+            {(step === 'pick' || step === 'preview') && (
+              <button
+                onClick={onClose}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Cancel
+              </button>
+            )}
+            {step === 'preview' && (
+              <button
+                onClick={handleImport}
+                disabled={readyRows.length === 0}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Upload className="h-4 w-4" />
+                {readyRows.length === rows.length && problemRows.length === 0
+                  ? `Import All ${readyRows.length} Products`
+                  : `Import ${readyRows.length} New Product${readyRows.length === 1 ? '' : 's'}`}
+              </button>
+            )}
+            {step === 'done' && (
+              <button
+                onClick={() => { onSuccess(); onClose(); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold shadow-md transition"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Done — View Products
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProductsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const [showImportModal, setShowImportModal] = useState(false);
   
   const [products, setProducts] = useState<Product[]>([]);
   const [pendingListings, setPendingListings] = useState<PendingVendorListing[]>([]);
@@ -112,6 +852,7 @@ export default function ProductsPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!isAuthenticated) return; // wait for auth before loading dropdowns
     async function loadCats() {
       try {
         const response = await productAPI.getCategories();
@@ -134,7 +875,7 @@ export default function ProductsPage() {
     }
     loadCats();
     loadTypes();
-  }, []);
+  }, [isAuthenticated]);
 
   // Selected product / details drawer states
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -507,6 +1248,7 @@ export default function ProductsPage() {
   );
 
   return (
+    <>
     <DashboardLayout>
       <div className="relative space-y-6">
         {error ? (
@@ -1061,18 +1803,26 @@ export default function ProductsPage() {
                 View and edit all products that have been compiled in the global system.
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => router.push('/dashboard/products/add')}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 px-4 py-2.5 text-xs font-bold text-white shadow-md transition"
-              >
-                <Plus className="h-4 w-4" />
-                Add Product
-              </button>
-              <div className="rounded-2xl bg-slate-100 px-4 py-2 font-mono text-xs uppercase tracking-[0.25em] text-slate-700">
-                {products.length} total products
+              <div className="flex items-center gap-3">
+                <button
+                  id="btn-import-excel"
+                  onClick={() => setShowImportModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-4 py-2.5 text-xs font-bold text-emerald-700 transition"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Import from Excel
+                </button>
+                <button
+                  onClick={() => router.push('/dashboard/products/add')}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 px-4 py-2.5 text-xs font-bold text-white shadow-md transition"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Product
+                </button>
+                <div className="rounded-2xl bg-slate-100 px-4 py-2 font-mono text-xs uppercase tracking-[0.25em] text-slate-700">
+                  {products.length} total products
+                </div>
               </div>
-            </div>
           </div>
 
           {loading ? (
@@ -1812,5 +2562,13 @@ export default function ProductsPage() {
         </>
       )}
     </DashboardLayout>
+      {showImportModal && (
+        <BulkImportModal
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => { void fetchProducts(); }}
+          knownCategories={categoriesOptions}
+        />
+      )}
+    </>
   );
 }
