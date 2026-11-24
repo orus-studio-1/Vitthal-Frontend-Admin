@@ -1233,12 +1233,15 @@ export default function ProductsPage() {
   }
 
   // Segment products
+  // Products made by an admin or super admin belong to the admin list, whoever's account it was.
+  const isAdminCreated = (product: Product) =>
+    !product.created_by_user_id || product.creator_role === 'admin' || product.creator_role === 'super_admin';
   const vendorProducts = products.filter(
     (product) =>
+      !isAdminCreated(product) &&
       (product.creator_role === 'vendor' ||
         Boolean(product.created_by_vendor_id) ||
-        Boolean(product.created_by_user_id)) &&
-      product.creator_role !== 'admin'
+        Boolean(product.created_by_user_id))
   );
   const adminProducts = products.filter(
     (product) => !vendorProducts.some((vp) => vp.id === product.id)
